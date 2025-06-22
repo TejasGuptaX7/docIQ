@@ -11,9 +11,12 @@ def health():
 @app.route("/embed", methods=["POST"])
 def embed():
     data = request.json
-    texts = data.get("texts", [])
+
+    # Accept both single string and list of strings
+    if "text" in data:
+        texts = [data["text"]]
+    else:
+        texts = data.get("texts", [])
+
     embeddings = model.encode(texts).tolist()
     return jsonify({"embeddings": embeddings})
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)

@@ -27,7 +27,7 @@ VectorMind is a local-first AI-powered document understanding system that combin
 # Start Weaviate
 docker compose up -d
 
-# Start Spring Boot (port 8081)
+# Start Spring Boot (port 8082)
 cd api
 ./mvnw spring-boot:run
 

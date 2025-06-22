@@ -1,154 +1,118 @@
-import { useState } from 'react';
-import axios from 'axios';
+// Modern VectorMind Frontend with Cluely-style Layout, ShadCN, and Tailwind
+// Features: File Upload, Chat-style Q&A, History List, Status UI
 
-function App() {
-  const [text, setText] = useState('');
+import React, { useState } from 'react';
+import axios from 'axios';
+import './App.css';
+
+
+export default function VectorMind() {
+  const [file, setFile] = useState<File | null>(null);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<string[]>([]);
+  const [answer, setAnswer] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
 
-  const storeText = async () => {
-    if (!text.trim()) return;
-    try {
-      await axios.post('http://localhost:8082/store', { text });
-      alert("Stored in VectorMind!");
-      setText('');
-    } catch (err) {
-      console.error(err);
-      alert("Failed to store");
-    }
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleUpload = async () => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      setUploadStatus(`Uploading ${file.name}...`);
-      const response = await axios.post('http://localhost:8082/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      const data = response.data;
-      const chunkDetails = data.chunkDetails;
-      setUploadStatus(
-        `Successfully processed ${data.filename}\n` +
-        `Divided into ${chunkDetails.totalChunks} chunks\n` +
-        `Total words: ${chunkDetails.totalWords}\n` +
-        `Words per chunk: ${chunkDetails.wordsPerChunk}`
-      );
-      setTimeout(() => setUploadStatus(''), 8000);
-    } catch (err: any) {
+      setUploadStatus('Uploading...');
+      await axios.post('http://localhost:8082/upload', formData);
+      setUploadStatus('Upload successful');
+      setHistory((prev) => [file.name, ...prev]);
+      setTimeout(() => setUploadStatus(''), 4000);
+    } catch (err) {
       console.error(err);
-      const errorMessage = err.response?.data?.message || err.message;
-      setUploadStatus(`Failed to upload ${file.name}: ${errorMessage}`);
-      setTimeout(() => setUploadStatus(''), 5000);
+      setUploadStatus('Upload failed');
+      setTimeout(() => setUploadStatus(''), 4000);
     }
   };
 
-  const searchText = async () => {
-    if (!query.trim()) return;
-    setLoading(true);
+  const handleSearch = async () => {
+    if (!query) return;
     try {
+      setLoading(true);
       const res = await axios.post('http://localhost:8082/search', { query });
-      const hits = res.data?.data?.Get?.Document || [];
-      setResults(hits.map((item: any) => item.text));
+      setAnswer(res.data.answer);
     } catch (err) {
       console.error(err);
-      alert("Search failed.");
+      setAnswer('Failed to retrieve answer.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black">
-      <div className="min-h-screen bg-zinc-900 p-6 font-sans">
-        <div className="max-w-xl mx-auto bg-zinc-800 shadow-lg rounded-2xl p-6">
-          <h1 className="text-3xl font-bold mb-6 text-center text-white">🧠 VectorMind</h1>
+    <div className="min-h-screen bg-neutral-950 text-white p-6 font-sans">
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-4xl font-bold text-center mb-8">🧠 VectorMind</h1>
 
-          {/* Chat Interface */}
-          <div className="space-y-4">
-            {/* Results Display */}
-            {!loading && results.length > 0 && (
-              <div className="bg-zinc-700 rounded-lg p-4">
-                <h2 className="text-xl font-semibold mb-2 text-white">Search Results:</h2>
-                <ul className="space-y-2">
-                  {results.map((text, i) => (
-                    <li key={i} className="text-gray-200 bg-zinc-600 p-3 rounded">{text}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Search Input */}
-            <div className="flex gap-2">
-              <input
-                className="flex-1 bg-zinc-700 text-white border border-zinc-600 p-3 rounded-lg focus:outline-none focus:border-blue-500"
-                placeholder="Ask a question..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <button
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-                onClick={searchText}
-              >
-                Search
-              </button>
-            </div>
-
-            {/* Upload Section */}
-            <div className="bg-zinc-700 rounded-lg p-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <textarea
-                    className="w-full bg-zinc-600 text-white border border-zinc-500 p-3 rounded-lg focus:outline-none focus:border-blue-500"
-                    placeholder="Or type your text here..."
-                    rows={3}
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-                    onClick={storeText}
-                  >
-                    Store
-                  </button>
-                  <label className="bg-zinc-600 text-white px-4 py-2 rounded-lg hover:bg-zinc-500 transition cursor-pointer text-center">
-                    <input
-                      type="file"
-                      accept=".pdf,.txt,.png,.jpg,.jpeg"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    Upload
-                  </label>
-                </div>
-              </div>
-              {uploadStatus && (
-                <p className="mt-2 text-sm text-gray-300">{uploadStatus}</p>
-              )}
-            </div>
+        {/* Upload Box */}
+        <div className="bg-neutral-800 p-6 rounded-2xl mb-6">
+          <h2 className="text-lg mb-2 font-semibold">Upload a Document</h2>
+          <div className="flex items-center gap-4">
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="w-full file:bg-blue-600 file:text-white file:rounded file:px-4 file:py-2 text-sm"
+            />
+            <button
+              onClick={handleUpload}
+              className="bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Upload
+            </button>
           </div>
-
-          {/* Loading State */}
-          {loading && (
-            <div className="text-center mt-4 text-gray-300">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-              <p className="mt-2">Searching...</p>
-            </div>
-          )}
+          {uploadStatus && <p className="text-sm mt-2 text-blue-300">{uploadStatus}</p>}
         </div>
+
+        {/* Search Section */}
+        <div className="bg-neutral-800 p-6 rounded-2xl mb-6">
+          <h2 className="text-lg font-semibold mb-2">Ask a Question</h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask something about your document..."
+              className="flex-1 bg-neutral-700 px-4 py-2 rounded focus:outline-none"
+            />
+            <button
+              onClick={handleSearch}
+              className="bg-green-600 px-4 py-2 rounded hover:bg-green-700"
+              disabled={loading}
+            >
+              Search
+            </button>
+          </div>
+          {loading && <p className="text-sm mt-2 text-gray-300">Searching...</p>}
+        </div>
+
+        {/* Answer Display */}
+        {answer && (
+          <div className="bg-neutral-800 p-6 rounded-2xl mb-6">
+            <h2 className="text-lg font-semibold mb-2">Answer</h2>
+            <p className="whitespace-pre-line text-gray-200">{answer}</p>
+          </div>
+        )}
+
+        {/* File History */}
+        {history.length > 0 && (
+          <div className="bg-neutral-800 p-6 rounded-2xl">
+            <h2 className="text-lg font-semibold mb-2">Recent Uploads</h2>
+            <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+              {history.map((file, idx) => (
+                <li key={idx}>{file}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default App;

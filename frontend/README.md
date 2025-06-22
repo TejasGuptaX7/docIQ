@@ -1,54 +1,99 @@
-# React + TypeScript + Vite
+# VectorMind
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**VectorMind** is an open‑source Retrieval‑Augmented‑Generation (RAG) platform that lets you upload PDFs (or raw text), ask plain‑English questions, and receive source‑anchored answers from GPT‑3.5.  It is architected to be production‑ready first—so you can plug in your own standout feature (citations, clipboard capture, VS Code overlay, etc.) without rewriting the plumbing.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ Why You Might Use It
 
-## Expanding the ESLint configuration
+| Capability                    | What It Gives You                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Upload → Chunk → Embed**    | Streams multi‑page PDFs, splits into sensible chunks, embeds via `sentence‑transformers`.                                    |
+| **Vector Store**              | Uses **Weaviate** with no built‑in vectorizer (you control embeddings).                                                      |
+| **Query Pipeline**            | Spring Boot endpoint embeds the user question, performs `nearVector` search, feeds the top N chunks to GPT‑3.5 (or any LLM). |
+| **Fallback & Logging**        | Automatic mock answer + console log if embedder, Weaviate, or OpenAI fails.                                                  |
+| **Dark‑Mode React Front‑end** | Upload UI, chat‑style Q\&A panel, file‑history list—built with Tailwind‑CSS.                                                 |
+| **Config‑Driven Secrets**     | `openai.api.key` pulled from `application.properties` **or** `OPENAI_API_KEY` env var—no hard‑coded secrets.                 |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## 🏗 Architecture
+
+```text
+client (React) ─┬─►  /upload  ─►  Spring Boot (API) ─►  Flask embedder  
+               │              │                           ↓
+               │              └──── store vectors ─────►  Weaviate DB
+               │
+               └─►  /search  ─►  (embed question) ─► Weaviate (nearVector)
+                                          │
+                                          ▼
+                                   GPT‑3.5 / OpenAI
+                                          │
+                                          ▼
+                                     JSON answer
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🚀 Quick Start (Local)
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```bash
+# clone and enter
+ git clone https://github.com/yourname/vectormind.git
+ cd vectormind
+
+# 1. start Weaviate via docker compose
+ docker-compose up -d
+
+# 2. run Flask embedder
+ cd embedder
+ python3 -m venv venv && source venv/bin/activate
+ pip install -r requirements.txt   # flask + sentence‑transformers
+ python embedder.py
+
+# 3. run Spring Boot (backend)
+ cd ../api
+ # put your key in application.properties  OR  export OPENAI_API_KEY=sk‑...
+ ./mvnw spring-boot:run
+
+# 4. run React front‑end
+ cd ../frontend
+ npm install && npm run dev
 ```
+
+Open [http://localhost:5173](http://localhost:5173) and start uploading.
+
+---
+
+## 🔧 Environment Configuration
+
+| Property / Env Var                     | Purpose                 |
+| -------------------------------------- | ----------------------- |
+| `openai.api.key` *or* `OPENAI_API_KEY` | GPT access token        |
+| `server.port` (Spring)                 | Default **8082**        |
+| `EMBEDDER_URL` (optional)              | Override Flask endpoint |
+
+---
+
+## 🛠 Roadmap (Tech)
+
+* [x] Health‑check endpoints for all services
+* [x] Retry wrapper + exponential back‑off around OpenAI
+* [ ] Source‑anchored citations (`page`, `start`, `end` props)
+* [ ] Docker‑compose that spins everything, including front‑end
+* [ ] Optional Firebase/Clerk auth gate
+
+---
+
+## 🤝 Contributing
+
+Pull requests are welcome—especially around chunk‑splitting, citation rendering, and VS Code overlay ideas.
+
+1. Fork → Branch → PR
+2. `pre-commit run --all-files` to lint
+
+---
+
+## 📝 License
+
+MIT.  Use it, fork it, ship your own killer feature.

@@ -1,5 +1,6 @@
 package com.vectormind.api;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -11,68 +12,111 @@ public class SearchController {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    /** Inject from application.properties (openai.api.key) or --openai.api.key */
+    @Value("${openai.api.key:}")
+    private String configuredOpenAiKey;   // empty string if not set
+
     @PostMapping("/search")
     public ResponseEntity<?> search(@RequestBody Map<String, String> payload) {
+
         try {
             String query = payload.get("query");
+            System.out.println("Received query: " + query);
 
-            // STEP 1: Embed the query via Flask
+            /* ---------- 1) Embed query ------------------------------------ */
             String embedderUrl = "http://localhost:5001/embed";
-            Map<String, Object> request = new HashMap<>();
-            request.put("texts", List.of(query));
+            Map<String, Object> embedReq = Map.of("texts", List.of(query));
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpHeaders json = new HttpHeaders();
+            json.setContentType(MediaType.APPLICATION_JSON);
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-            ResponseEntity<Map> embedResponse = restTemplate.postForEntity(embedderUrl, entity, Map.class);
+            ResponseEntity<Map> embedRes = restTemplate.postForEntity(
+                    embedderUrl, new HttpEntity<>(embedReq, json), Map.class);
 
-            List<List<Double>> embeddings = (List<List<Double>>) embedResponse.getBody().get("embeddings");
-            List<Double> queryVector = embeddings.get(0);
+            if (!embedRes.getStatusCode().is2xxSuccessful())
+                return mock("Embedder failed: " + embedRes.getStatusCode());
 
-            // STEP 2: Search Weaviate with vector
+            List<List<Double>> vecs =
+                    (List<List<Double>>) embedRes.getBody().get("embeddings");
+            if (vecs == null || vecs.isEmpty())
+                return mock("No embeddings");
+
+            /* ---------- 2) Weaviate search -------------------------------- */
+            List<Double> vector = vecs.get(0);
             String weaviateUrl = "http://localhost:8080/v1/graphql";
-            String graphqlQuery = "{\n" +
-                "  Get {\n" +
-                "    Document(\n" +
-                "      nearVector: {\n" +
-                "        vector: " + queryVector.toString() + ",\n" +
-                "        certainty: 0.7\n" +
-                "      },\n" +
-                "      limit: 3\n" +
-                "    ) {\n" +
-                "      text\n" +
-                "    }\n" +
-                "  }\n" +
-                "}";
+            String graphqlQuery = "{ Get { Document(nearVector:{vector:" + vector + ",certainty:0.3},limit:5){ text } } }";
 
             Map<String, String> graphqlBody = new HashMap<>();
             graphqlBody.put("query", graphqlQuery);
 
-            HttpEntity<Map<String, String>> weaviateRequest = new HttpEntity<>(graphqlBody, headers);
-            ResponseEntity<Map> weaviateResponse = restTemplate.postForEntity(weaviateUrl, weaviateRequest, Map.class);
+            ResponseEntity<Map> wv = restTemplate.postForEntity(
+                    weaviateUrl,
+                    new HttpEntity<>(graphqlBody, json), Map.class);
 
-            List<Map<String, Object>> docs = (List<Map<String, Object>>)
-                ((Map<String, Object>) ((Map<String, Object>) weaviateResponse.getBody().get("data")).get("Get")).get("Document");
+            List<Map<String, Object>> docs =
+                (List<Map<String, Object>>)
+                    ((Map) ((Map) wv.getBody().get("data"))
+                           .get("Get")).get("Document");
 
-            // STEP 3: Concatenate top texts for LLM
+            if (docs == null || docs.isEmpty())
+                return mock("No context");
+
             StringBuilder context = new StringBuilder();
-            for (Map<String, Object> doc : docs) {
-                context.append(doc.get("text")).append("\n");
-            }
+            docs.forEach(d -> context.append(d.get("text")).append('\n'));
 
-            // STEP 4: Send to AWS Bedrock (Mocked here)
-            // Replace with your Bedrock logic if integrated
-            String answer = "Based on your query, here's a mock answer:\n\n" + context.toString();
+            /* ---------- 3) OpenAI call ------------------------------------ */
+            String openaiKey = !configuredOpenAiKey.isBlank()
+                               ? configuredOpenAiKey
+                               : System.getenv("OPENAI_API_KEY");
 
-            Map<String, String> response = new HashMap<>();
-            response.put("answer", answer);
+            if (openaiKey == null || openaiKey.isBlank())
+                return mock("Missing OpenAI key");
 
-            return ResponseEntity.ok(response);
+            HttpHeaders oaHead = new HttpHeaders();
+            oaHead.setContentType(MediaType.APPLICATION_JSON);
+            oaHead.setBearerAuth(openaiKey);
+
+            Map<String, Object> oaReq = Map.of(
+                    "model", "gpt-3.5-turbo",
+                    "messages", List.of(
+                            Map.of("role", "system",
+                                   "content", "Answer strictly from context."),
+                            Map.of("role", "user",
+                                   "content", "Context:\n" + context +
+                                              "\n\nQuestion:\n" + query)
+                    ),
+                    "max_tokens", 256,
+                    "temperature", 0.7
+            );
+
+            ResponseEntity<Map> oaRes = restTemplate.postForEntity(
+                    "https://api.openai.com/v1/chat/completions",
+                    new HttpEntity<>(oaReq, oaHead), Map.class);
+
+            System.out.println("OpenAI status: " + oaRes.getStatusCode());
+
+            List<Map<String, Object>> choices =
+                    (List<Map<String, Object>>) oaRes.getBody().get("choices");
+            if (choices == null || choices.isEmpty())
+                return mock("Empty choices");
+
+            String answer =
+                (String) ((Map) choices.get(0).get("message")).get("content");
+
+            return ResponseEntity.ok(Map.of("answer", answer.trim()));
 
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: " + e.getMessage());
+            return mock("Exception: " + e.getMessage());
         }
+    }
+
+    /* --------------------------- helper ---------------------------------- */
+    private ResponseEntity<Map<String, String>> mock(String reason) {
+        System.out.println("Falling back to mock — " + reason);
+        return ResponseEntity.ok(
+                Map.of("answer",
+                       "Based on your query, here's a mock answer:")
+        );
     }
 }

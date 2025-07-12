@@ -5,6 +5,8 @@
     "tailwindcss": "^4.1.10"
   },
   "dependencies": {
+    "@tiptap/react": "^2.25.0",
+    "@tiptap/starter-kit": "^2.25.0",
     "lucide-react": "^0.517.0"
   }
 }

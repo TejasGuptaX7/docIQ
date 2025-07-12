@@ -1,99 +1,73 @@
-# VectorMind
+# Welcome to your Lovable project
 
-**VectorMind** is an open‑source Retrieval‑Augmented‑Generation (RAG) platform that lets you upload PDFs (or raw text), ask plain‑English questions, and receive source‑anchored answers from GPT‑3.5.  It is architected to be production‑ready first—so you can plug in your own standout feature (citations, clipboard capture, VS Code overlay, etc.) without rewriting the plumbing.
+## Project info
 
----
+**URL**: https://lovable.dev/projects/307464a1-324e-4114-9ada-d49bc1793d59
 
-## ✨ Why You Might Use It
+## How can I edit this code?
 
-| Capability                    | What It Gives You                                                                                                            |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Upload → Chunk → Embed**    | Streams multi‑page PDFs, splits into sensible chunks, embeds via `sentence‑transformers`.                                    |
-| **Vector Store**              | Uses **Weaviate** with no built‑in vectorizer (you control embeddings).                                                      |
-| **Query Pipeline**            | Spring Boot endpoint embeds the user question, performs `nearVector` search, feeds the top N chunks to GPT‑3.5 (or any LLM). |
-| **Fallback & Logging**        | Automatic mock answer + console log if embedder, Weaviate, or OpenAI fails.                                                  |
-| **Dark‑Mode React Front‑end** | Upload UI, chat‑style Q\&A panel, file‑history list—built with Tailwind‑CSS.                                                 |
-| **Config‑Driven Secrets**     | `openai.api.key` pulled from `application.properties` **or** `OPENAI_API_KEY` env var—no hard‑coded secrets.                 |
+There are several ways of editing your application.
 
----
+**Use Lovable**
 
-## 🏗 Architecture
+Simply visit the [Lovable Project](https://lovable.dev/projects/307464a1-324e-4114-9ada-d49bc1793d59) and start prompting.
 
-```text
-client (React) ─┬─►  /upload  ─►  Spring Boot (API) ─►  Flask embedder  
-               │              │                           ↓
-               │              └──── store vectors ─────►  Weaviate DB
-               │
-               └─►  /search  ─►  (embed question) ─► Weaviate (nearVector)
-                                          │
-                                          ▼
-                                   GPT‑3.5 / OpenAI
-                                          │
-                                          ▼
-                                     JSON answer
+Changes made via Lovable will be committed automatically to this repo.
+
+**Use your preferred IDE**
+
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+Follow these steps:
+
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
 ```
 
----
+**Edit a file directly in GitHub**
 
-## 🚀 Quick Start (Local)
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-```bash
-# clone and enter
- git clone https://github.com/yourname/vectormind.git
- cd vectormind
+**Use GitHub Codespaces**
 
-# 1. start Weaviate via docker compose
- docker-compose up -d
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-# 2. run Flask embedder
- cd embedder
- python3 -m venv venv && source venv/bin/activate
- pip install -r requirements.txt   # flask + sentence‑transformers
- python embedder.py
+## What technologies are used for this project?
 
-# 3. run Spring Boot (backend)
- cd ../api
- # put your key in application.properties  OR  export OPENAI_API_KEY=sk‑...
- ./mvnw spring-boot:run
+This project is built with:
 
-# 4. run React front‑end
- cd ../frontend
- npm install && npm run dev
-```
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-Open [http://localhost:5173](http://localhost:5173) and start uploading.
+## How can I deploy this project?
 
----
+Simply open [Lovable](https://lovable.dev/projects/307464a1-324e-4114-9ada-d49bc1793d59) and click on Share -> Publish.
 
-## 🔧 Environment Configuration
+## Can I connect a custom domain to my Lovable project?
 
-| Property / Env Var                     | Purpose                 |
-| -------------------------------------- | ----------------------- |
-| `openai.api.key` *or* `OPENAI_API_KEY` | GPT access token        |
-| `server.port` (Spring)                 | Default **8082**        |
-| `EMBEDDER_URL` (optional)              | Override Flask endpoint |
+Yes, you can!
 
----
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-## 🛠 Roadmap (Tech)
-
-* [x] Health‑check endpoints for all services
-* [x] Retry wrapper + exponential back‑off around OpenAI
-* [ ] Source‑anchored citations (`page`, `start`, `end` props)
-* [ ] Docker‑compose that spins everything, including front‑end
-* [ ] Optional Firebase/Clerk auth gate
-
----
-
-## 🤝 Contributing
-
-Pull requests are welcome—especially around chunk‑splitting, citation rendering, and VS Code overlay ideas.
-
-1. Fork → Branch → PR
-2. `pre-commit run --all-files` to lint
-
----
-
-## 📝 License
-
-MIT.  Use it, fork it, ship your own killer feature.
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)

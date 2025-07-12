@@ -1,5 +1,6 @@
 package com.vectormind.api;
 
+import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.http.*;
@@ -8,130 +9,141 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
-import java.util.*;
-import java.util.Base64;
-import java.util.stream.Collectors;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-/**
- * Handles file upload → chunk → embed → store.
- * Supports .pdf and .txt (add more types as needed).
- */
 @RestController
+@RequestMapping("/api")
+@RequiredArgsConstructor
 public class UploadController {
-    private static final Logger logger = LoggerFactory.getLogger(UploadController.class);
-    private final RestTemplate restTemplate = new RestTemplate();
 
-    /* ---------- Public endpoint ---------- */
-    @PostMapping("/upload")
-    public ResponseEntity<?> handleUpload(@RequestParam("file") MultipartFile file) {
-        try {
-            String filename = file.getOriginalFilename();
-            if (filename == null) {
-                logger.error("No filename provided");
-                return ResponseEntity.badRequest().body("No file name");
-            }
+  private final RestTemplate restTemplate = new RestTemplate();
+  private static final int TOKENS_PER_CHUNK = 400;
 
-            logger.info("Received file: {}", filename);
-            String extension = StringUtils.getFilenameExtension(filename).toLowerCase();
-            logger.info("File extension: {}", extension);
+  /* ---------- POST /api/upload ---------- */
+  @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file) {
 
-            List<String> textsToEmbed = new ArrayList<>();
-            String rawText = "";
+    try {
+      String filename = Objects.requireNonNull(file.getOriginalFilename());
+      String ext      = StringUtils.getFilenameExtension(filename).toLowerCase();
+      String docId    = UUID.randomUUID().toString();
 
-            if (extension.equals("pdf")) {
-                try (PDDocument doc = PDDocument.load(file.getInputStream())) {
-                    rawText = new PDFTextStripper().getText(doc);
-                    textsToEmbed = chunkText(rawText, 400);
-                    logger.info("Extracted {} chunks from PDF", textsToEmbed.size());
-                }
-            } else if (extension.equals("txt")) {
-                rawText = new String(file.getBytes(), StandardCharsets.UTF_8);
-                textsToEmbed = chunkText(rawText, 400);
-                logger.info("Extracted {} chunks from text file", textsToEmbed.size());
-            } else if (extension.equals("png") || extension.equals("jpg") || extension.equals("jpeg")) {
-                String base64 = Base64.getEncoder().encodeToString(file.getBytes());
-                textsToEmbed.add(base64);
-                logger.info("Converted image to base64");
-            } else {
-                logger.error("Unsupported file type: {}", extension);
-                return ResponseEntity.badRequest().body("Unsupported file type");
-            }
-
-            Map<String, Object> request = new HashMap<>();
-            request.put("texts", textsToEmbed);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            logger.info("Sending {} chunks to embedder", textsToEmbed.size());
-            ResponseEntity<Map> response = restTemplate.postForEntity("http://localhost:5001/embed", entity, Map.class);
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                logger.error("Embedding failed with status: {}", response.getStatusCode());
-                return ResponseEntity.status(500).body("Embedding failed");
-            }
-
-            List<List<Double>> embeddings = (List<List<Double>>) response.getBody().get("embeddings");
-            logger.info("Received {} embeddings from embedder", embeddings.size());
-
-            for (int i = 0; i < textsToEmbed.size(); i++) {
-                Map<String, Object> obj = Map.of(
-                    "class", "Document",
-                    "properties", Map.of("text", textsToEmbed.get(i)),
-                    "vector", embeddings.get(i)
-                );
-                HttpEntity<Map<String, Object>> weaviateEntity = new HttpEntity<>(obj, headers);
-                ResponseEntity<String> weaviateResponse = restTemplate.postForEntity(
-                    "http://localhost:8080/v1/objects", 
-                    weaviateEntity, 
-                    String.class
-                );
-                if (!weaviateResponse.getStatusCode().is2xxSuccessful()) {
-                    logger.error("Failed to store chunk {} in Weaviate", i);
-                }
-            }
-
-            logger.info("Successfully processed and stored file: {}", filename);
-            
-            // Calculate word count
-            int wordCount = rawText.split("\\s+").length;
-            
-            // Create a terminal-friendly response
-            String responseString = String.format("""
-                Successfully processed %s
-                Divided into %d chunks
-                Total words: %d
-                Words per chunk: %d
-                """, 
-                filename,
-                textsToEmbed.size(),
-                wordCount,
-                400
-            );
-            
-            return ResponseEntity.ok(responseString);
-
-        } catch (Exception e) {
-            logger.error("Error processing file: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+      /* ---- 1. Extract raw text ------------------------------------- */
+      String rawText;
+      if (ext.equals("pdf")) {
+        try (PDDocument pdf = PDDocument.load(file.getInputStream())) {
+          rawText = new PDFTextStripper().getText(pdf);
         }
-    }
+      } else if (ext.equals("txt")) {
+        rawText = new String(file.getBytes(), StandardCharsets.UTF_8);
+      } else {
+        return ResponseEntity.badRequest().body("Unsupported type " + ext);
+      }
 
-    /* ---------- Helper: word-based chunker ---------- */
-    private List<String> chunkText(String text, int maxTokens) {
-        String[] words = text.split("\\s+");
-        List<String> chunks = new ArrayList<>();
-        for (int i = 0; i < words.length; i += maxTokens) {
-            chunks.add(Arrays.stream(words, i, Math.min(i + maxTokens, words.length))
+      /* ---- 2. Chunk & embed --------------------------------------- */
+      List<String> chunks = chunkText(rawText, TOKENS_PER_CHUNK);
+
+      Map<String, Object> embedReq = Map.of("texts", chunks);
+      HttpHeaders jsonHeaders = new HttpHeaders();
+      jsonHeaders.setContentType(MediaType.APPLICATION_JSON);
+
+      @SuppressWarnings("unchecked")
+      List<List<Double>> vectors = (List<List<Double>>) restTemplate
+          .postForEntity("http://localhost:5001/embed",
+                         new HttpEntity<>(embedReq, jsonHeaders), Map.class)
+          .getBody()
+          .get("embeddings");
+
+      /* ---- 3. Store in Weaviate ----------------------------------- */
+      for (int i = 0; i < chunks.size(); i++) {
+        Map<String, Object> obj = Map.of(
+          "class", "Chunk",
+          "id", UUID.randomUUID().toString(),
+          "properties", Map.of(
+              "docId", docId,
+              "text",  chunks.get(i),
+              "page",  i + 1
+          ),
+          "vector", vectors.get(i)
+        );
+        restTemplate.postForEntity("http://localhost:8080/v1/objects",
+                           new HttpEntity<>(obj, jsonHeaders), String.class);
+      }
+
+      /* ---- 4. Save metadata Document object ----------------------- */
+      ResponseEntity<String> response = restTemplate.postForEntity(
+        "http://localhost:8080/v1/objects",
+        new HttpEntity<>(Map.of(
+          "class", "Document",
+          "id",    docId,
+          "properties", Map.of(
+              "title", filename,
+              "pages", chunks.size(),
+              "processed", true)
+        ), jsonHeaders),
+        String.class
+      );
+      
+      System.out.println("✅ Document Save Response: " + response.getBody());
+      
+
+      /* ---- 5. Return payload to UI ------------------------------- */
+      int wordCount = rawText.split("\\s+").length;
+      return ResponseEntity.ok(Map.of(
+          "docId",   docId,
+          "chunks",  chunks.size(),
+          "words",   wordCount,
+          "name",    filename
+      ));
+
+    } catch (Exception e) {
+      return ResponseEntity.status(500).body(e.getMessage());
+    }
+  }
+
+  /* ---------- GET /api/documents for sidebar ---------- */
+  @GetMapping("/documents")
+  public List<Map<String, Object>> listDocs() {
+    String gql = """
+      {
+        Get {
+          Document {
+            _additional { id }
+            title
+            processed
+            pages
+          }
+        }
+      }
+    """;
+
+    HttpHeaders jsonHeaders = new HttpHeaders();
+    jsonHeaders.setContentType(MediaType.APPLICATION_JSON);
+
+    Map<?, ?> res = restTemplate.postForObject(
+        "http://localhost:8080/v1/graphql",
+        new HttpEntity<>(Map.of("query", gql), jsonHeaders), 
+        Map.class);
+
+    Map<?, ?> data = (Map<?, ?>) res.get("data");
+    Map<?, ?> get  = (Map<?, ?>) data.get("Get");
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> docs = (List<Map<String, Object>>) get.get("Document");
+
+    return docs;
+  }
+
+  /* ---------- helper ---------- */
+  private List<String> chunkText(String text, int maxTokens) {
+    String[] words = text.split("\\s+");
+    List<String> out = new ArrayList<>();
+    for (int i = 0; i < words.length; i += maxTokens) {
+      out.add(Arrays.stream(words, i, Math.min(i + maxTokens, words.length))
                     .collect(Collectors.joining(" ")));
-        }
-        return chunks;
     }
-    
+    return out;
+  }
 }

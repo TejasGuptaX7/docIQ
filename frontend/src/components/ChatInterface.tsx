@@ -58,7 +58,7 @@ const ChatInterface = ({ selectedDoc }: ChatInterfaceProps) => {
     setIsTyping(true);
 
     try {
-      const response = await fetch(`/search`, {
+      const response = await fetch(`/api/search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: inputValue, docId: selectedDoc }),

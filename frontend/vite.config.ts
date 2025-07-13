@@ -1,37 +1,38 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
+import { componentTagger } from 'lovable-tagger';
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "0.0.0.0",
+    host: '0.0.0.0',
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8082',
-      '/search': 'http://localhost:8082',
+      // ⬅️  All /api/** calls are forwarded to Spring Boot
+      '/api': {
+        target: 'http://localhost:8082',
+        changeOrigin: true,
+      },
     },
     fs: { strict: false },
-    historyApiFallback: true,
   },
+
   plugins: [
     react(),
     mode === 'development' && componentTagger(),
   ].filter(Boolean),
+
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: { '@': path.resolve(__dirname, './src') },
   },
+
   optimizeDeps: {
-    include: ['pdfjs-dist/build/pdf.worker.js'], // ✅ Include worker
+    include: ['pdfjs-dist/build/pdf.worker.js'],
   },
+
   build: {
     rollupOptions: {
-      output: {
-        manualChunks: undefined, // ✅ prevent code splitting issues for dynamic import
-      },
+      output: { manualChunks: undefined }, // avoid dynamic-import worker issues
     },
   },
 }));

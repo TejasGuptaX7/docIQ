@@ -1,23 +1,40 @@
-import { useEffect, useRef } from "react";
+// src/components/PdfEditorView.tsx
+import { useEffect, useRef } from 'react';
 
-const PdfEditorView = ({ docId }: { docId: string }) => {
-  const viewerRef = useRef<HTMLDivElement>(null);
+interface Props { docId: string | null; }
 
+export default function PdfEditorView({ docId }: Props) {
+  const container = useRef<HTMLDivElement>(null);
+  const instance  = useRef<any>(null);
+
+  // — initialise WebViewer once —
   useEffect(() => {
-    const load = async () => {
+    const boot = async () => {
+      if (!container.current || instance.current) return;
+
       const WebViewer = (await import('@pdftron/pdfjs-express-viewer')).default;
-      WebViewer(
+
+      instance.current = await WebViewer(
         {
-          path: "/pdfjs-express",  // ✅ folder inside public
-          initialDoc: `/api/${docId}.pdf`, // ✅ your Spring Boot PDF endpoint
+          path: '/pdfjs-express',                 // folder in /public
+          licenseKey: '7VPVv7vHAjudWJUtAoEU',     // key works on localhost + dociq.tech
         },
-        viewerRef.current!
+        container.current
       );
+
+      // load first doc if already selected
+      if (docId) instance.current.UI.loadDocument(`/api/${docId}.pdf`);
     };
-    load();
+
+    boot();
+  }, []);                                        // ← only on mount
+
+  // — load new doc when selection changes —
+  useEffect(() => {
+    if (instance.current && docId) {
+      instance.current.UI.loadDocument(`/api/${docId}.pdf`);
+    }
   }, [docId]);
 
-  return <div ref={viewerRef} className="w-full h-[85vh] rounded-xl shadow-md" />;
-};
-
-export default PdfEditorView;
+  return <div ref={container} className="w-full h-[85vh] rounded-xl shadow-md" />;
+}

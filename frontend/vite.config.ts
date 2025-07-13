@@ -12,8 +12,8 @@ export default defineConfig(({ mode }) => ({
       '/api': 'http://localhost:8082',
       '/search': 'http://localhost:8082',
     },
-    fs: { strict: false }, // optional
-    historyApiFallback: true, // ✅ ADD THIS LINE
+    fs: { strict: false },
+    historyApiFallback: true,
   },
   plugins: [
     react(),
@@ -22,6 +22,16 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  optimizeDeps: {
+    include: ['pdfjs-dist/build/pdf.worker.js'], // ✅ Include worker
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined, // ✅ prevent code splitting issues for dynamic import
+      },
     },
   },
 }));

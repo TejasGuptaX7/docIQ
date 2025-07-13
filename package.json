@@ -5,6 +5,7 @@
     "tailwindcss": "^4.1.10"
   },
   "dependencies": {
+    "@pdftron/pdfjs-express-viewer": "^8.7.5",
     "@tiptap/react": "^2.25.0",
     "@tiptap/starter-kit": "^2.25.0",
     "lucide-react": "^0.517.0"

@@ -8,115 +8,109 @@ import org.springframework.web.client.RestTemplate;
 import java.util.*;
 
 @RestController
+@RequestMapping("/api")
 public class SearchController {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+  private final RestTemplate rest = new RestTemplate();
 
-    /** Inject from application.properties (openai.api.key) or --openai.api.key */
-    @Value("${openai.api.key:}")
-    private String configuredOpenAiKey;   // empty string if not set
+  @Value("${openai.api.key:}")
+  private String cfgKey;
 
-    @PostMapping("/search")
-    public ResponseEntity<?> search(@RequestBody Map<String, String> payload) {
+  @PostMapping("/search")
+  public ResponseEntity<?> search(@RequestBody Map<String,String> body) {
 
-        try {
-            String query = payload.get("query");
-            System.out.println("Received query: " + query);
+    try {
+      String query = body.getOrDefault("query", "").trim();
+      String docId = body.get("docId");
+      if (query.isBlank() || docId == null)
+        return mock("missing query or docId");
 
-            /* ---------- 1) Embed query ------------------------------------ */
-            String embedderUrl = "http://localhost:5001/embed";
-            Map<String, Object> embedReq = Map.of("texts", List.of(query));
+      // 1 — embed query
+      HttpHeaders hJson = new HttpHeaders();
+      hJson.setContentType(MediaType.APPLICATION_JSON);
+      Map<String,Object> eReq = Map.of("texts", List.of(query));
 
-            HttpHeaders json = new HttpHeaders();
-            json.setContentType(MediaType.APPLICATION_JSON);
+      List<?> vec = (List<?>) ((List<?>)
+        rest.postForObject("http://localhost:5001/embed",
+          new HttpEntity<>(eReq,hJson), Map.class)
+          .get("embeddings")).get(0);
 
-            ResponseEntity<Map> embedRes = restTemplate.postForEntity(
-                    embedderUrl, new HttpEntity<>(embedReq, json), Map.class);
-
-            if (!embedRes.getStatusCode().is2xxSuccessful())
-                return mock("Embedder failed: " + embedRes.getStatusCode());
-
-            List<List<Double>> vecs =
-                    (List<List<Double>>) embedRes.getBody().get("embeddings");
-            if (vecs == null || vecs.isEmpty())
-                return mock("No embeddings");
-
-            /* ---------- 2) Weaviate search -------------------------------- */
-            List<Double> vector = vecs.get(0);
-            String weaviateUrl = "http://localhost:8080/v1/graphql";
-            String graphqlQuery = "{ Get { Document(nearVector:{vector:" + vector + ",certainty:0.3},limit:5){ text } } }";
-
-            Map<String, String> graphqlBody = new HashMap<>();
-            graphqlBody.put("query", graphqlQuery);
-
-            ResponseEntity<Map> wv = restTemplate.postForEntity(
-                    weaviateUrl,
-                    new HttpEntity<>(graphqlBody, json), Map.class);
-
-            List<Map<String, Object>> docs =
-                (List<Map<String, Object>>)
-                    ((Map) ((Map) wv.getBody().get("data"))
-                           .get("Get")).get("Document");
-
-            if (docs == null || docs.isEmpty())
-                return mock("No context");
-
-            StringBuilder context = new StringBuilder();
-            docs.forEach(d -> context.append(d.get("text")).append('\n'));
-
-            /* ---------- 3) OpenAI call ------------------------------------ */
-            String openaiKey = !configuredOpenAiKey.isBlank()
-                               ? configuredOpenAiKey
-                               : System.getenv("OPENAI_API_KEY");
-
-            if (openaiKey == null || openaiKey.isBlank())
-                return mock("Missing OpenAI key");
-
-            HttpHeaders oaHead = new HttpHeaders();
-            oaHead.setContentType(MediaType.APPLICATION_JSON);
-            oaHead.setBearerAuth(openaiKey);
-
-            Map<String, Object> oaReq = Map.of(
-                    "model", "gpt-3.5-turbo",
-                    "messages", List.of(
-                            Map.of("role", "system",
-                                   "content", "Answer strictly from context."),
-                            Map.of("role", "user",
-                                   "content", "Context:\n" + context +
-                                              "\n\nQuestion:\n" + query)
-                    ),
-                    "max_tokens", 256,
-                    "temperature", 0.7
-            );
-
-            ResponseEntity<Map> oaRes = restTemplate.postForEntity(
-                    "https://api.openai.com/v1/chat/completions",
-                    new HttpEntity<>(oaReq, oaHead), Map.class);
-
-            System.out.println("OpenAI status: " + oaRes.getStatusCode());
-
-            List<Map<String, Object>> choices =
-                    (List<Map<String, Object>>) oaRes.getBody().get("choices");
-            if (choices == null || choices.isEmpty())
-                return mock("Empty choices");
-
-            String answer =
-                (String) ((Map) choices.get(0).get("message")).get("content");
-
-            return ResponseEntity.ok(Map.of("answer", answer.trim()));
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return mock("Exception: " + e.getMessage());
+      // 2 — search in Weaviate, scoped to this docId
+      String gql = """
+        {
+          Get {
+            Chunk(
+              where:{ path:["docId"], operator:Equal, valueText:"%s" }
+              nearVector:{vector:%s}
+              limit:4
+            ){
+              text
+              page
+              _additional { certainty }
+            }
+          }
         }
-    }
+      """.formatted(docId, vec.toString());
 
-    /* --------------------------- helper ---------------------------------- */
-    private ResponseEntity<Map<String, String>> mock(String reason) {
-        System.out.println("Falling back to mock — " + reason);
-        return ResponseEntity.ok(
-                Map.of("answer",
-                       "Based on your query, here's a mock answer:")
-        );
+      Map<?,?> weav = rest.postForObject(
+        "http://localhost:8080/v1/graphql",
+        new HttpEntity<>(Map.of("query", gql), hJson), Map.class);
+
+      List<Map<String,Object>> chunks = (List<Map<String,Object>>)
+        ((Map<?,?>)((Map<?,?>) weav.get("data")).get("Get")).get("Chunk");
+
+      if (chunks==null || chunks.isEmpty()) return mock("no chunks");
+
+      StringBuilder ctx = new StringBuilder();
+      for (Map<String,Object> c : chunks)
+        ctx.append("Page ").append(c.get("page")).append(": ")
+           .append(c.get("text")).append("\n\n");
+
+      // 3 — call OpenAI
+      String key = !cfgKey.isBlank() ? cfgKey : System.getenv("OPENAI_API_KEY");
+      if (key==null || key.isBlank()) return mock("no key");
+
+      HttpHeaders oh = new HttpHeaders();
+      oh.setContentType(MediaType.APPLICATION_JSON);
+      oh.setBearerAuth(key);
+
+      Map<String,Object> oaReq = Map.of(
+        "model", "gpt-3.5-turbo",
+        "messages", List.of(
+          Map.of("role","system", "content", "Answer strictly from the provided context."),
+          Map.of("role","user", "content", "Context:\n"+ctx+"\n\nQuestion:\n"+query)
+        ),
+        "temperature", 0.2,
+        "max_tokens", 256
+      );
+
+      Map<?,?> oa = rest.postForObject(
+        "https://api.openai.com/v1/chat/completions",
+        new HttpEntity<>(oaReq, oh), Map.class);
+
+      Map<String,Object> message = (Map<String,Object>)
+        ((Map<?,?>)((List<?>) oa.get("choices")).get(0)).get("message");
+
+      String answer = (String) message.get("content");
+
+      List<Map<String,Object>> src = chunks.stream().map(c -> Map.of(
+        "page", c.get("page"),
+        "excerpt", ((String)c.get("text")).substring(0, 120) + "…",
+        "confidence", ((Map<?,?>)c.get("_additional")).get("certainty")
+      )).toList();
+
+      return ResponseEntity.ok(Map.of("answer", answer.trim(), "sources", src));
+
+    } catch(Exception e){
+      e.printStackTrace();
+      return mock("error "+e.getMessage());
     }
+  }
+
+  private ResponseEntity<Map<String,String>> mock(String reason){
+    System.out.println("mock → "+reason);
+    return ResponseEntity.ok(Map.of(
+      "answer","Based on your query, here's a mock answer:"
+    ));
+  }
 }

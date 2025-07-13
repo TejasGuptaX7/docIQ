@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+
 /* VectorMind / DocIQ Design System */
 
 @layer base {
@@ -110,6 +111,10 @@
 
   .floating-shape {
     @apply absolute opacity-20 animate-float;
+  }
+
+  .pdf-container canvas {
+    @apply shadow-md mb-2;
   }
 }
 

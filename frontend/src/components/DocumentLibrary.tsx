@@ -10,24 +10,39 @@ interface DocumentLibraryProps {
   selectedDoc: string | null;
 }
 
-/* shape returned by /api/documents */
 interface DocMeta {
   _additional: { id: string };
-  title: string | null;   // ← can be null
+  title: string | null;
   processed: boolean;
   pages: number | null;
 }
 
-const fetchDocs = async (): Promise<DocMeta[]> =>
-  (await fetch("/api/documents")).json();
+/** <-- NOW simply returns the array the backend sends */
+const fetchDocs = async (): Promise<DocMeta[]> => {
+  try {
+    console.log("🔄 Fetching documents...");
+    const res = await fetch("/api/documents");
+    if (!res.ok) throw new Error(`API failed: ${res.status}`);
+    const data = await res.json();
+    console.log("✅ Documents fetched:", data);
+    return data;
+  } catch (e) {
+    console.error("❌ Failed to fetch documents:", e);
+    return [];
+  }
+};
 
 const DocumentLibrary = ({ onSelectDoc, selectedDoc }: DocumentLibraryProps) => {
   const { data: docs = [], isLoading, refetch } = useQuery({
     queryKey: ["documents"],
     queryFn: fetchDocs,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
-  /* refetch after successful upload */
+  console.log("DocumentLibrary render:", { docs, isLoading, docsLength: docs.length });
+
+  /* let UploadButton trigger a sidebar refresh */
   useEffect(() => {
     (window as any).refetchDocs = refetch;
   }, [refetch]);
@@ -41,22 +56,20 @@ const DocumentLibrary = ({ onSelectDoc, selectedDoc }: DocumentLibraryProps) => 
     );
   }
 
-  if (docs.length === 0) {
+  if (!docs.length) {
     return <p className="text-muted-foreground text-sm">No documents yet.</p>;
   }
 
   return (
     <div className="space-y-3">
       {docs.map((doc) => {
-        /* defensive fallbacks */
-        const id        = doc._additional?.id ?? crypto.randomUUID();
-        const name      = doc.title?.trim() || "Untitled";
+        const id   = doc._additional?.id ?? crypto.randomUUID();
+        const name = doc.title?.trim() || "Untitled";
         const processed = Boolean(doc.processed);
-        const pages     = doc.pages ?? "?";
+        const pages = doc.pages ?? "?";
 
-        /* safe ext parse */
-        const ext = name.includes(".") ? name.split(".").pop() : "";
-        const type = ext ? ext!.toUpperCase() : "DOC";
+        const ext  = name.includes(".") ? name.split(".").pop() : "";
+        const type = ext ? ext.toUpperCase() : "DOC";
         const size = `${pages} pg`;
 
         return (
@@ -77,7 +90,6 @@ const DocumentLibrary = ({ onSelectDoc, selectedDoc }: DocumentLibraryProps) => 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                   <h4 className="font-medium text-sm truncate">{name}</h4>
-
                   <Badge
                     variant="secondary"
                     className={`text-xs ${
@@ -95,10 +107,8 @@ const DocumentLibrary = ({ onSelectDoc, selectedDoc }: DocumentLibraryProps) => 
                   </Badge>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {type} • {size}
-                  </span>
+                <div className="text-xs text-muted-foreground">
+                  {type} • {size}
                 </div>
               </div>
             </div>

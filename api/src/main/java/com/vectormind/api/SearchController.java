@@ -75,7 +75,7 @@ public class SearchController {
       oh.setBearerAuth(key);
 
       Map<String,Object> oaReq = Map.of(
-        "model", "gpt-3.5-turbo",
+        "model", "gpt-4o-mini",
         "messages", List.of(
           Map.of("role","system", "content", "Answer strictly from the provided context."),
           Map.of("role","user", "content", "Context:\n"+ctx+"\n\nQuestion:\n"+query)

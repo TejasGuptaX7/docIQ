@@ -1,15 +1,22 @@
-import { useRef, useState } from "react";
-import { toast } from "@/components/ui/use-toast";
-import { Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRef, useState } from 'react';
+import { toast } from '@/components/ui/use-toast';
+import { Upload } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
 interface Props {
-  onUploaded: () => void;        // callback → refetch docs
+  currentWorkspace: string;
+  workspaces: string[];
+  onUploaded: () => void;
 }
 
-export default function UploadButton({ onUploaded }: Props) {
+export default function UploadButton({ currentWorkspace, workspaces, onUploaded }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [ws, setWs] = useState(currentWorkspace);
 
   const handleSelect = () => fileRef.current?.click();
 
@@ -19,46 +26,38 @@ export default function UploadButton({ onUploaded }: Props) {
     setLoading(true);
 
     const body = new FormData();
-    body.append("file", file);
+    body.append('file', file);
+    body.append('workspace', ws);
 
     try {
-      const res = await fetch(`/api/upload`, {
-        method: "POST",
-        body,
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      toast({ title: "Uploaded ✔︎", description: file.name });
-      onUploaded();               // refetch sidebar list
-    } catch (err) {
-      toast({
-        title: "Upload error",
-        description: (err as Error).message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+      const res = await fetch('/api/upload', { method:'POST', body });
+      if (!res.ok) throw new Error('Upload failed');
+      toast({ title:'Uploaded ✔︎', description:file.name });
+      onUploaded();
+    } catch(err:any){
+      toast({ title:'Upload error', description:err.message, variant:'destructive'});
+    } finally { setLoading(false); }
   };
 
   return (
     <>
-      <input
-        type="file"
-        accept=".pdf,.doc,.docx,.txt"
-        hidden
-        ref={fileRef}
-        onChange={handleUpload}
-      />
-      <Button
-        size="sm"
-        variant="outline"
-        className="glass-morphism"
-        onClick={handleSelect}
-        disabled={loading}
-      >
-        <Upload className="w-4 h-4 mr-2" />
-        {loading ? "Uploading…" : "Upload"}
-      </Button>
+      <input type="file" hidden ref={fileRef} onChange={handleUpload}
+             accept=".pdf,.doc,.docx,.txt"/>
+      <div className="flex items-center gap-2">
+        <Select value={ws} onValueChange={setWs}>
+          <SelectTrigger className="w-28 h-8 text-xs">
+            <SelectValue/>
+          </SelectTrigger>
+          <SelectContent>
+            {workspaces.map(w=>(
+              <SelectItem key={w} value={w}>{w}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" onClick={handleSelect} disabled={loading}>
+          <Upload className="w-4 h-4 mr-1"/>{loading?'…':'Upload'}
+        </Button>
+      </div>
     </>
   );
 }

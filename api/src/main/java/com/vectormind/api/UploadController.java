@@ -25,11 +25,14 @@ public class UploadController {
   private static final int TOKENS_PER_CHUNK = 400;
 
   @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file) {
+  public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file, @RequestParam(value = "workspace", required = false) String workspace) {
     try {
       String filename = Objects.requireNonNull(file.getOriginalFilename());
       String ext = StringUtils.getFilenameExtension(filename).toLowerCase();
       String docId = UUID.randomUUID().toString();
+      
+      // Set default workspace if not provided
+      workspace = workspace != null ? workspace.trim() : "default";
 
       // Extract raw text
       String rawText;
@@ -82,7 +85,8 @@ public class UploadController {
           "properties", Map.of(
             "title", filename,
             "pages", chunks.size(),
-            "processed", true
+            "processed", true,
+            "workspace", workspace
           )
         ), jsonHeaders), String.class);
 

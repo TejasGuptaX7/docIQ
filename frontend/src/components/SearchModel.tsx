@@ -1,113 +1,112 @@
-import React, { useState, useEffect } from "react";
-import { Search, Clock, File, Brain, Zap } from "lucide-react";
-import { Card } from "@/components/ui/card";            // tailwind-styled card wrapper
+import React, { useState, useEffect } from 'react';
+import {
+  Search, Clock, File, Brain, Zap, Cloud,
+} from 'lucide-react';
+import { Card } from '@/components/ui/card';
 
-interface SearchModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+interface Props { isOpen: boolean; onClose: () => void; }
+const recentDemo = ['project proposal draft', 'meeting notes Q3', 'AI trends', 'budget spreadsheet'];
 
-const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
-  const [query, setQuery] = useState("");
+export default function SearchModal({ isOpen, onClose }: Props) {
+  const [query, setQuery] = useState('');
 
-  // demo “recent” data – swap for real history later
-  const recentSearches = [
-    "project proposal draft",
-    "meeting notes Q3",
-    "research on AI trends",
-    "budget spreadsheet",
-  ];
-
-  /* --- Esc to close ------------------------------------------------------ */
+  /* ESC to close */
   useEffect(() => {
-    const escListener = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    if (isOpen) {
-      document.addEventListener("keydown", escListener);
-      return () => document.removeEventListener("keydown", escListener);
-    }
+    const f = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (isOpen) { document.addEventListener('keydown', f); return () => document.removeEventListener('keydown', f); }
   }, [isOpen, onClose]);
+
+  /* — Uploadcare dialog — */
+  const openUploader = () => {
+    // @ts-ignore   (global from <script … uploadcare…>)
+    const dialog = window.uploadcare.openDialog(null, {
+      multiple: true,
+      tabs:     'file url gdrive dropbox onedrive',
+    });
+
+    dialog.done((group: any) => {
+      group.files().forEach(async (p: any) => {
+        const file = await p;                                 // CDN file JSON
+        await fetch('/api/upload/external', {                 // ⇦ tiny endpoint, same as before
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ url: file.cdnUrl, name: file.name }),
+        });
+        // Let sidebar refresh
+        (window as any).refetchDocs?.();
+      });
+    });
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-32">
-      <Card className="w-full max-w-2xl mx-4 border-border glass-morphism shadow-2xl">
-        {/* Search input row ------------------------------------------------- */}
+      <Card className="w-full max-w-2xl mx-4 border-border glass-morphism shadow-2xl animate-scale-in">
+        {/* Search bar */}
         <div className="flex items-center p-4 border-b border-border">
           <Search className="w-5 h-5 text-muted-foreground mr-3" />
           <input
             autoFocus
-            type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={e => setQuery(e.target.value)}
             placeholder="Search documents, queries, and canvas content…"
             className="flex-1 bg-transparent outline-none placeholder-muted-foreground"
           />
-          <kbd className="px-2 py-1 text-xs bg-muted rounded border text-muted-foreground">
-            ESC
-          </kbd>
+          <kbd className="px-2 py-1 text-xs bg-muted rounded border text-muted-foreground">ESC</kbd>
         </div>
 
-        {/* Results / recent / quick actions -------------------------------- */}
-        <div className="p-4 max-h-96 overflow-y-auto">
+        {/* Body */}
+        <div className="p-4 max-h-96 overflow-y-auto space-y-6">
           {query ? (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground mb-3">Search results</p>
-              {/* ⇨ TODO: map real results here */}
-              <div className="p-3 rounded-lg hover:bg-muted/50 cursor-pointer flex items-center space-x-3">
+            <>
+              <p className="text-sm text-muted-foreground mb-2">Search results</p>
+              {/* TODO: real search */}
+              <button className="w-full p-3 rounded-lg hover:bg-muted/50 flex items-center space-x-3">
                 <File className="w-4 h-4 text-indigo-400" />
-                <div>
-                  <p className="font-medium">Project Proposal.pdf</p>
-                  <p className="text-sm text-muted-foreground">
-                    Contains “{query}”
-                  </p>
-                </div>
-              </div>
-            </div>
+                <span className="font-medium">Project Proposal.pdf</span>
+              </button>
+            </>
           ) : (
-            <div className="space-y-6">
-              {/* Recent ---------------------------------------------------- */}
+            <>
+              {/* Recent */}
               <div>
                 <p className="flex items-center text-sm text-muted-foreground mb-2">
-                  <Clock className="w-4 h-4 mr-2" />
-                  Recent searches
+                  <Clock className="w-4 h-4 mr-2" /> Recent searches
                 </p>
-                {recentSearches.map((text) => (
-                  <button
-                    key={text}
-                    onClick={() => setQuery(text)}
-                    className="block w-full text-left p-3 rounded-lg hover:bg-muted/50 text-sm"
-                  >
-                    {text}
+                {recentDemo.map(t => (
+                  <button key={t} onClick={() => setQuery(t)}
+                          className="block w-full text-left p-3 rounded-lg hover:bg-muted/50 text-sm">
+                    {t}
                   </button>
                 ))}
               </div>
 
-              {/* Quick actions -------------------------------------------- */}
+              {/* Quick actions */}
               <div>
                 <p className="flex items-center text-sm text-muted-foreground mb-2">
-                  <Zap className="w-4 h-4 mr-2" />
-                  Quick actions
+                  <Zap className="w-4 h-4 mr-2" /> Quick actions
                 </p>
                 <div className="space-y-1">
                   <button className="w-full p-3 rounded-lg hover:bg-muted/50 flex items-center text-sm">
-                    <Brain className="w-4 h-4 mr-3 text-indigo-400" />
-                    Ask AI assistant
+                    <Brain className="w-4 h-4 mr-3 text-indigo-400" /> Ask AI assistant
                   </button>
-                  <button className="w-full p-3 rounded-lg hover:bg-muted/50 flex items-center text-sm">
-                    <File className="w-4 h-4 mr-3 text-teal-400" />
-                    Upload documents
+                  <button
+                    onClick={openUploader}
+                    className="w-full p-3 rounded-lg hover:bg-muted/50 flex items-center text-sm"
+                  >
+                    <Cloud className="w-4 h-4 mr-3 text-teal-400" /> Upload / Connect cloud storage
                   </button>
                 </div>
               </div>
-            </div>
+
+              <p className="text-xs text-muted-foreground">
+                Powered by free Uploadcare widget (3 GB quota).
+              </p>
+            </>
           )}
         </div>
       </Card>
     </div>
   );
-};
-
-export default SearchModal;
+}

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { toast } from '@/components/ui/use-toast';
-import { Upload } from 'lucide-react';
+import { Upload, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem,
@@ -11,6 +11,12 @@ interface Props {
   currentWorkspace: string;
   workspaces: string[];
   onUploaded: () => void;
+}
+
+declare global {
+  interface Window {
+    uploadcare: any;
+  }
 }
 
 export default function UploadButton({ currentWorkspace, workspaces, onUploaded }: Props) {
@@ -39,6 +45,26 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
     } finally { setLoading(false); }
   };
 
+  const handleCloudConnect = () => {
+    const widget = window.uploadcare.openDialog(null, {
+      tabs: 'file url gdrive dropbox onedrive',
+    });
+    widget.done((fileInfo: any) => {
+      fetch('/api/upload/external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: fileInfo.cdnUrl,
+          name: fileInfo.name,
+          workspace: ws,
+        }),
+      }).then(() => {
+        toast({ title: 'Cloud file connected ✔︎', description: fileInfo.name });
+        onUploaded();
+      });
+    });
+  };
+
   return (
     <>
       <input type="file" hidden ref={fileRef} onChange={handleUpload}
@@ -46,16 +72,21 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
       <div className="flex items-center gap-2">
         <Select value={ws} onValueChange={setWs}>
           <SelectTrigger className="w-28 h-8 text-xs">
-            <SelectValue/>
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {workspaces.map(w=>(
+            {workspaces.map(w => (
               <SelectItem key={w} value={w}>{w}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+
         <Button size="sm" variant="outline" onClick={handleSelect} disabled={loading}>
-          <Upload className="w-4 h-4 mr-1"/>{loading?'…':'Upload'}
+          <Upload className="w-4 h-4 mr-1"/>{loading ? '…' : 'Upload'}
+        </Button>
+
+        <Button size="sm" variant="outline" onClick={handleCloudConnect}>
+          <UploadCloud className="w-4 h-4 mr-1"/> Connect Cloud
         </Button>
       </div>
     </>

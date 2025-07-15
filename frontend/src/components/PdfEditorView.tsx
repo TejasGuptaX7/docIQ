@@ -1,71 +1,110 @@
 import { useEffect, useRef } from 'react';
 
-interface Props { docId: string | null; }
+interface Props { docId: string | null }
 
+/**
+ * WebViewer wrapper that:
+ *   ① boots PDF.js Express
+ *   ② shows a floating “➕ Add to chat” button immediately after a highlight
+ *   ③ dispatches filename + page + line-range with the selected text
+ */
 export default function PdfEditorView({ docId }: Props) {
   const container = useRef<HTMLDivElement>(null);
-  const instance  = useRef<any>(null);
+  const viewer    = useRef<any>(null);
+  const btnRef    = useRef<HTMLButtonElement | null>(null);
 
-  /** initialise once */
   useEffect(() => {
-    const boot = async () => {
-      if (!container.current || instance.current) return;
+    const init = async () => {
+      if (!container.current || viewer.current) return;
 
+      // 1️⃣ Load viewer once
       const WebViewer = (await import('@pdftron/pdfjs-express-viewer')).default;
-
-      instance.current = await WebViewer(
-        {
-          path: '/pdfjs-express',
-          licenseKey: '7VPVv7vHAjudWJUtAoEU',
-        },
+      viewer.current = await WebViewer(
+        { path: '/pdfjs-express', licenseKey: '7VPVv7vHAjudWJUtAoEU' },
         container.current
       );
 
-      /** add text-selection event → floating “Add to chat” button */
-      instance.current.Core.documentViewer.addEventListener('textSelected', () => {
-        const sel = instance.current.Core.documentViewer.getSelectedText();
-        if (!sel.trim()) return;
+      // 2️⃣ Ensure our host div can show floating children
+      Object.assign(container.current.style, { position: 'relative', overflow: 'visible' });
 
-        const button = document.createElement('button');
-        button.textContent = '➕ Add to chat';
-        button.className =
-          'px-2 py-1 bg-primary text-white rounded shadow z-50';
-        const quad = instance.current.Core.documentViewer
-          .getSelectionManager()
-          .getQuads(0)[0]
-          ?.getBoundingBox();
-        if (!quad) return;
+      // 3️⃣ Create “Add to chat” button inside the viewer iframe
+      const iwin = viewer.current.UI.iframeWindow;
+      const idoc = iwin.document;
+      const btn  = idoc.createElement('button');
+      btn.textContent = '➕ Add to chat';
+      Object.assign(btn.style, {
+        position: 'absolute',
+        padding:  '4px 8px',
+        fontSize: '12px',
+        background: '#7C3AED',
+        color:   '#fff',
+        border:  'none',
+        borderRadius: '4px',
+        cursor:  'pointer',
+        display: 'none',
+        zIndex:  10_000,
+      });
+      idoc.body.appendChild(btn);
+      btnRef.current = btn;
 
-        const iframeDoc = instance.current.UI.iframeWindow.document;
-        button.style.position = 'absolute';
-        button.style.left = `${quad.x1}px`;
-        button.style.top  = `${quad.y2 + 6}px`;
-        iframeDoc.body.appendChild(button);
+      // 4️⃣ Click → fire event + hide
+      btn.addEventListener('click', () => {
+        const dv   = viewer.current.Core.documentViewer as any;
+        const sel  = iwin.getSelection()?.toString().trim() || '';
+        if (!sel || !docId) return;
 
-        button.onclick = () => {
-          window.dispatchEvent(
-            new CustomEvent('add-selection-to-chat', {
-              detail: { docId, text: sel },
-            })
-          );
-          button.remove();
-          instance.current.Core.documentViewer.clearSelection();
-        };
+        /* filename via Express API, fallback to docId */
+        const filename: string =
+          dv.getDocument()?.getFilename?.() || docId;
+
+        /* page # */
+        const quads = dv.getSelectionQuads?.() ?? [];
+        const page  = quads.length ? quads[0].PageNumber : dv.getCurrentPage?.() || 1;
+
+        /* rough start / end line-numbers from quad Y-offsets */
+        let start = 0, end = 0;
+        if (quads.length) {
+          const lineH = 10;                                 // px estimate
+          const ys    = quads.flatMap((q:any) => q.Quads.map((qq:any)=>qq.y1));
+          start = Math.round(Math.min(...ys) / lineH) + 1;
+          end   = Math.round(Math.max(...ys) / lineH) + 1;
+        }
+
+        window.dispatchEvent(new CustomEvent('add-selection-to-chat', {
+          detail: { docId, filename, text: sel, page, start, end }
+        }));
+
+        btn.style.display = 'none';
+        iwin.getSelection()?.removeAllRanges();
       });
 
-      if (docId) instance.current.UI.loadDocument(`/api/${docId}.pdf`);
-    };
-    boot();
-  }, []);          // ← only first mount
+      // 5️⃣ Show button immediately after mouse-up if something is selected
+      idoc.addEventListener('mouseup', () => {
+        setTimeout(() => {
+          const sel = iwin.getSelection()?.toString().trim() || '';
+          if (!sel) { btn.style.display = 'none'; return; }
 
-  /** load when user selects new doc */
+          const range = iwin.getSelection()!.getRangeAt(0);
+          const rect  = range.getBoundingClientRect();
+          btn.style.left   = `${rect.left}px`;
+          btn.style.top    = `${rect.bottom + 6}px`;
+          btn.style.display = 'block';
+        }, 10);
+      });
+
+      /* first load */
+      if (docId) viewer.current.UI.loadDocument(`/api/${docId}.pdf`);
+    };
+    init();
+  }, []);
+
+  /* when user picks another doc */
   useEffect(() => {
-    if (instance.current && docId) {
-      instance.current.UI.loadDocument(`/api/${docId}.pdf`);
+    if (viewer.current && docId) {
+      viewer.current.UI.loadDocument(`/api/${docId}.pdf`);
+      if (btnRef.current) btnRef.current.style.display = 'none';
     }
   }, [docId]);
 
-  return (
-    <div ref={container} className="w-full h-[85vh] rounded-xl shadow-md" />
-  );
+  return <div ref={container} className="w-full h-[85vh] rounded-xl shadow-md"/>;
 }

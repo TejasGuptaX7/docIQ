@@ -1,4 +1,3 @@
-// src/pages/Dashboard.tsx
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -21,8 +20,9 @@ import AssistantPanel from '@/components/AssistantPanel';
 import SearchModel from '@/components/SearchModel';
 import useDocTags from '@/hooks/useDocTags';
 
-// ——— Types & Fetch —————————————————————————————————————————————————————
+import { UserButton } from '@clerk/clerk-react';
 
+// ——— Types & Fetch —————————————————————————————————————————————————————
 interface Doc {
   _additional: { id: string };
   title: string | null;
@@ -35,7 +35,6 @@ const fetchDocs = async (): Promise<Doc[]> => {
 };
 
 // ——— Dashboard Component ——————————————————————————————————————————————————
-
 export default function Dashboard() {
   const navigate = useNavigate();
 
@@ -70,12 +69,12 @@ export default function Dashboard() {
   // map workspace name → icon
   const wsIcon = (w: string) => {
     switch (w.toLowerCase()) {
-      case 'research':   return <Search className="w-4 h-4" />;
-      case 'academic':   return <Sparkles className="w-4 h-4" />;
-      case 'fun':        return <User className="w-4 h-4" />;
+      case 'research': return <Search className="w-4 h-4" />;
+      case 'academic': return <Sparkles className="w-4 h-4" />;
+      case 'fun': return <User className="w-4 h-4" />;
       case 'literature': return <FileText className="w-4 h-4" />;
-      case 'travel':     return <Globe className="w-4 h-4" />;
-      default:           return <FileText className="w-4 h-4" />;
+      case 'travel': return <Globe className="w-4 h-4" />;
+      default: return <FileText className="w-4 h-4" />;
     }
   };
 
@@ -97,9 +96,7 @@ export default function Dashboard() {
         workspaces={workspaces}
         wsIcon={wsIcon}
         onNew={() =>
-          // trigger the sheet open button inside the sidebar
-          (document.getElementById('ws-sheet-btn') as HTMLButtonElement)
-            ?.click()
+          (document.getElementById('ws-sheet-btn') as HTMLButtonElement)?.click()
         }
       />
 
@@ -111,8 +108,8 @@ export default function Dashboard() {
             <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Back
             </Button>
-            <Badge className="bg-primary/10 text-primary border-primary/20 flex items-center">
-              <Sparkles className="w-3 h-3 mr-1" /> AI Assistant Active
+            <Badge className="bg-primary/10 text-primary border-primary/50 flex items-center">
+              <Sparkles className="w-0 h-0 mr-1" /> AI Active
             </Badge>
           </div>
 
@@ -143,9 +140,8 @@ export default function Dashboard() {
             <Button size="sm" variant="ghost">
               <Settings className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="ghost">
-              <User className="w-4 h-4" />
-            </Button>
+
+            <UserButton afterSignOutUrl="/" />
           </div>
         </div>
 

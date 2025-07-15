@@ -1,23 +1,26 @@
-/* src/pages/Index.tsx  — full, compile-ready */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Brain, Upload, MessageSquare, Zap, FileText, Search, ArrowRight, Moon, Sun } from 'lucide-react';
+import { SignInButton, useAuth } from '@clerk/clerk-react';
 
-import { Button }   from '@/components/ui/button';
-import { Input }    from '@/components/ui/input';
-import { Card }     from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 
-import Aurora          from '@/components/reactbit/backgrounds/Aurora/Aurora';
-import AnimatedText    from '@/components/AnimatedText';
+import Aurora from '@/components/reactbit/backgrounds/Aurora/Aurora';
+import AnimatedText from '@/components/AnimatedText';
 import DrawnExplanation from '@/assets/DrawnExplanation.png';
-import FloatingShapes  from '@/components/FloatingShapes';
-import GradientMesh    from '@/components/GradientMesh';
+import FloatingShapes from '@/components/FloatingShapes';
+import GradientMesh from '@/components/GradientMesh';
 
 export default function Index() {
   const [isDark, setIsDark] = useState(true);
   const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
 
-  useEffect(() => { document.documentElement.classList.add('dark'); }, []);
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+  }, []);
 
   const toggleTheme = () => {
     setIsDark(!isDark);
@@ -50,7 +53,9 @@ export default function Index() {
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
-            <Button variant="outline" className="glass-morphism">Sign In</Button>
+            <SignInButton mode="modal">
+              <Button variant="outline" className="glass-morphism">Sign In</Button>
+            </SignInButton>
           </div>
         </header>
 
@@ -60,7 +65,7 @@ export default function Index() {
             <h1 className="text-6xl md:text-8xl font-bold font-space leading-tight">
               Transform Documents into
               <span className="block text-gradient animate-gradient-x">
-                <AnimatedText words={['Intelligence','Conversations','Insights','Knowledge']} />
+                <AnimatedText words={['Intelligence', 'Conversations', 'Insights', 'Knowledge']} />
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto">
@@ -81,7 +86,13 @@ export default function Index() {
                       size="lg"
                       variant="outline"
                       className="flex-1 glass-morphism"
-                      onClick={() => navigate('/dashboard')}
+                      onClick={() => {
+                        if (isSignedIn) {
+                          navigate('/dashboard');
+                        } else {
+                          window.location.href = '/sign-in';
+                        }
+                      }}
                     >
                       <MessageSquare className="w-5 h-5 mr-2" />
                       Try Demo
@@ -129,10 +140,10 @@ export default function Index() {
         <section className="max-w-6xl mx-auto px-6 pb-20">
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon:<Brain/>, title:'AI-Powered', desc:'Semantic understanding', grad:'from-purple-500 to-pink-500' },
-              { icon:<Zap/>,   title:'Fast',       desc:'Vector search',        grad:'from-blue-500 to-cyan-500' },
-              { icon:<FileText/>,title:'Any Doc',  desc:'PDF, Word, URLs',      grad:'from-green-500 to-emerald-500' },
-            ].map((f,i)=>(
+              { icon: <Brain />, title: 'AI-Powered', desc: 'Semantic understanding', grad: 'from-purple-500 to-pink-500' },
+              { icon: <Zap />, title: 'Fast', desc: 'Vector search', grad: 'from-blue-500 to-cyan-500' },
+              { icon: <FileText />, title: 'Any Doc', desc: 'PDF, Word, URLs', grad: 'from-green-500 to-emerald-500' },
+            ].map((f, i) => (
               <Card key={i} className="p-6 glass-morphism hover:scale-105 transition">
                 <div className={`w-16 h-16 mb-4 rounded-2xl bg-gradient-to-r ${f.grad}
                                  flex items-center justify-center text-white`}>
@@ -149,7 +160,13 @@ export default function Index() {
         <section className="text-center pb-20">
           <Button
             size="lg"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => {
+              if (isSignedIn) {
+                navigate('/dashboard');
+              } else {
+                window.location.href = '/sign-in';
+              }
+            }}
             className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 text-lg font-semibold"
           >
             Experience DocIQ <ArrowRight className="w-5 h-5 ml-2" />

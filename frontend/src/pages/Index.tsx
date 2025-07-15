@@ -1,7 +1,24 @@
+// src/pages/Index.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, Upload, MessageSquare, Zap, FileText, Search, ArrowRight, Moon, Sun } from 'lucide-react';
-import { SignInButton, useAuth } from '@clerk/clerk-react';
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignOutButton,
+  UserButton
+} from '@clerk/clerk-react';
+import {
+  Brain,
+  Upload,
+  MessageSquare,
+  Zap,
+  FileText,
+  Search,
+  ArrowRight,
+  Moon,
+  Sun
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +33,6 @@ import GradientMesh from '@/components/GradientMesh';
 export default function Index() {
   const [isDark, setIsDark] = useState(true);
   const navigate = useNavigate();
-  const { isSignedIn } = useAuth();
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
@@ -53,9 +69,21 @@ export default function Index() {
             <Button variant="ghost" size="icon" onClick={toggleTheme}>
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </Button>
-            <SignInButton mode="modal">
-              <Button variant="outline" className="glass-morphism">Sign In</Button>
-            </SignInButton>
+
+            {/* show Sign In when signed out */}
+            <SignedOut>
+              <SignInButton mode="modal">
+                <Button variant="outline" className="glass-morphism">Sign In</Button>
+              </SignInButton>
+            </SignedOut>
+
+            {/* once signed in, show profile & Sign Out */}
+            <SignedIn>
+              <UserButton />
+              <SignOutButton>
+                <Button variant="outline" className="glass-morphism">Sign Out</Button>
+              </SignOutButton>
+            </SignedIn>
           </div>
         </header>
 
@@ -82,22 +110,29 @@ export default function Index() {
                       <Upload className="w-5 h-5 mr-2" />
                       Upload Document
                     </Button>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="flex-1 glass-morphism"
-                      onClick={() => {
-                        if (isSignedIn) {
-                          navigate('/dashboard');
-                        } else {
-                          window.location.href = '/sign-in';
-                        }
-                      }}
-                    >
-                      <MessageSquare className="w-5 h-5 mr-2" />
-                      Try Demo
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+
+                    {/* Try Demo button */}
+                    <SignedOut>
+                      <SignInButton mode="modal">
+                        <Button size="lg" variant="outline" className="flex-1 glass-morphism">
+                          <MessageSquare className="w-5 h-5 mr-2" />
+                          Try Demo
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </SignInButton>
+                    </SignedOut>
+                    <SignedIn>
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        className="flex-1 glass-morphism"
+                        onClick={() => navigate('/dashboard')}
+                      >
+                        <MessageSquare className="w-5 h-5 mr-2" />
+                        Try Demo
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </SignedIn>
                   </div>
 
                   <div className="relative">
@@ -158,19 +193,25 @@ export default function Index() {
 
         {/* final CTA */}
         <section className="text-center pb-20">
-          <Button
-            size="lg"
-            onClick={() => {
-              if (isSignedIn) {
-                navigate('/dashboard');
-              } else {
-                window.location.href = '/sign-in';
-              }
-            }}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 text-lg font-semibold"
-          >
-            Experience DocIQ <ArrowRight className="w-5 h-5 ml-2" />
-          </Button>
+          <SignedOut>
+            <SignInButton mode="modal">
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 text-lg font-semibold"
+              >
+                Experience DocIQ <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </SignInButton>
+          </SignedOut>
+          <SignedIn>
+            <Button
+              size="lg"
+              onClick={() => navigate('/dashboard')}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 text-lg font-semibold"
+            >
+              Experience DocIQ <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+          </SignedIn>
         </section>
       </div>
     </div>

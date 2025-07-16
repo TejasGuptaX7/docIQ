@@ -19,7 +19,7 @@ import PdfEditorView from '@/components/PdfEditorView';
 import AssistantPanel from '@/components/AssistantPanel';
 import SearchModel from '@/components/SearchModel';
 import useDocTags from '@/hooks/useDocTags';
-
+import ConnectDriveButton from '@/components/ConnectDriveButton';
 import { UserButton } from '@clerk/clerk-react';
 
 // ——— Types & Fetch —————————————————————————————————————————————————————
@@ -125,6 +125,7 @@ export default function Dashboard() {
               <Button size="icon" variant="ghost" onClick={() => navigate('/uploads')}>
                 <FileText className="w-4 h-4" />
               </Button>
+              <ConnectDriveButton />
 
               <UploadButton
                 currentWorkspace={workspace}

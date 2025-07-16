@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import Index from '@/pages/Index';
 import Dashboard from '@/components/Dashboard';
+import UploadsPage from '@/components/UploadsPage';
 import OAuthCallback from '@/pages/OAuthCallback';
 import NotFound from '@/pages/NotFound';
 
@@ -22,6 +23,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/uploads" element={<UploadsPage />} />
             <Route path="/oauth/callback" element={<OAuthCallback />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

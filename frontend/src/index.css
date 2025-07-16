@@ -2,91 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-
-/* VectorMind / DocIQ Design System */
-
+/* ───────── VectorMind / DocIQ Design System ───────── */
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 262 83% 58%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 262 83% 58%;
-
-    --radius: 0.75rem;
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 6%;
+    --foreground: 210 20% 90%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 10%;
+    --card-foreground: 210 20% 90%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 210 20% 90%;
 
-    --primary: 262 83% 58%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 265 80% 60%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 240 5% 18%;
+    --secondary-foreground: 210 20% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 240 3% 14%;
+    --muted-foreground: 220 5% 50%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 265 80% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --border: 240 5% 15%;
+    --input: 240 5% 15%;
+    --ring: 265 80% 60%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 262 83% 58%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 220 5% 70%;
+    --sidebar-primary: 265 80% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 0 0% 8%;
+    --sidebar-accent-foreground: 220 5% 80%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-ring: 265 80% 60%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
@@ -97,6 +50,10 @@
 }
 
 @layer components {
+  .glass-background {
+    @apply bg-gradient-to-br from-[#0e0e10] via-[#1a1a1d] to-[#0e0e10] backdrop-blur-lg;
+  }
+
   .glass-morphism {
     @apply bg-white/10 backdrop-blur-md border border-white/20;
   }
@@ -122,30 +79,25 @@
 ::-webkit-scrollbar {
   width: 6px;
 }
-
 ::-webkit-scrollbar-track {
   @apply bg-muted;
 }
-
 ::-webkit-scrollbar-thumb {
   @apply bg-primary/50 rounded-full;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-primary/70;
 }
 
-/* === ScrollReveal Animation Styles === */
+/* === ScrollReveal Styles === */
 .scroll-reveal {
   margin: 20px 0;
 }
-
 .scroll-reveal-text {
   font-size: clamp(1.6rem, 4vw, 3rem);
   line-height: 1.5;
   font-weight: 600;
 }
-
 .word {
   display: inline-block;
 }
@@ -153,21 +105,20 @@
 /* === Floating Animation === */
 @keyframes float {
   0% {
-    transform: translateY(0px);
+    transform: translateY(0);
   }
   50% {
     transform: translateY(-10px);
   }
   100% {
-    transform: translateY(0px);
+    transform: translateY(0);
   }
 }
-
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
 
-/* === Scale In Animation === */
+/* === Scale In === */
 @keyframes scale-in {
   0% {
     transform: scale(0.95);
@@ -178,7 +129,43 @@
     opacity: 1;
   }
 }
-
 .animate-scale-in {
   animation: scale-in 0.2s ease-out;
+}
+
+/* ─────── Added Overrides for Clerk / PDF.js / Uploadcare ─────── */
+:root {
+  --clerk-primary: #7C3AED;
+}
+
+.clerk-card {
+  @apply glass-morphism backdrop-blur-lg shadow-xl;
+}
+
+/* PDF.js Express toolbar */
+#viewer .documentHeaderControls,
+#viewer .tools-header {
+  background: rgba(20, 20, 20, 0.85) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+#viewer .tools-header button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Uploadcare widget */
+.uploadcare--widget__button,
+.uploadcare--widget__button_action {
+  background-color: var(--clerk-primary) !important;
+  border-radius: 8px !important;
+}
+.uploadcare--widget__header {
+  font-family: 'Inter', sans-serif !important;
+  background: rgba(20, 20, 20, 0.9) !important;
+}
+
+/* Simple spinner */
+.loader {
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--clerk-primary);
+  @apply rounded-full w-5 h-5 animate-spin inline-block;
 }

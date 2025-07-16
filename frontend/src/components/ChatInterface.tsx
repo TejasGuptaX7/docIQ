@@ -166,7 +166,10 @@ export default function ChatInterface({ selectedDoc }: Props) {
                   </div>
                 </div>
               ))}
-              {typing && <p className="px-4 text-sm text-muted-foreground">AI is typing…</p>}
+              {typing && (
+  <div className="px-4 flex items-center gap-2 text-sm text-muted-foreground">
+    <span className="loader" /> AI is typing…
+  </div>)}
             </div>
             <div ref={endRef} />
             <ScrollBar orientation="vertical" />

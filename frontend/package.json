@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.34.0",
+    "@clerk/themes": "^2.3.0",
     "@hookform/resolvers": "^3.9.0",
     "@pdftron/pdfjs-express-viewer": "^8.7.5",
     "@radix-ui/react-accordion": "^1.2.0",

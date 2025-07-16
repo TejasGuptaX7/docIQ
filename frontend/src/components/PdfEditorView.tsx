@@ -23,6 +23,7 @@ export default function PdfEditorView({ docId }: Props) {
         { path: '/pdfjs-express', licenseKey: '7VPVv7vHAjudWJUtAoEU' },
         container.current
       );
+      viewer.current.UI.setTheme('dark');
 
       // 2️⃣ Ensure our host div can show floating children
       Object.assign(container.current.style, { position: 'relative', overflow: 'visible' });

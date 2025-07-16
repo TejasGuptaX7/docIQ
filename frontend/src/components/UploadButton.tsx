@@ -13,11 +13,7 @@ interface Props {
   onUploaded: () => void;
 }
 
-declare global {
-  interface Window {
-    uploadcare: any;
-  }
-}
+declare global { interface Window { uploadcare: any; refetchDocs?: () => void; } }
 
 export default function UploadButton({ currentWorkspace, workspaces, onUploaded }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,6 +36,7 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
       if (!res.ok) throw new Error('Upload failed');
       toast({ title:'Uploaded ✔︎', description:file.name });
       onUploaded();
+      window.refetchDocs?.();                       // refresh list
     } catch(err:any){
       toast({ title:'Upload error', description:err.message, variant:'destructive'});
     } finally { setLoading(false); }
@@ -51,16 +48,13 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
     });
     widget.done((fileInfo: any) => {
       fetch('/api/upload/external', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: fileInfo.cdnUrl,
-          name: fileInfo.name,
-          workspace: ws,
-        }),
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body:JSON.stringify({ url:fileInfo.cdnUrl, name:fileInfo.name, workspace:ws }),
       }).then(() => {
-        toast({ title: 'Cloud file connected ✔︎', description: fileInfo.name });
+        toast({ title:'Cloud file connected ✔︎', description:fileInfo.name });
         onUploaded();
+        window.refetchDocs?.();                     // refresh list
       });
     });
   };

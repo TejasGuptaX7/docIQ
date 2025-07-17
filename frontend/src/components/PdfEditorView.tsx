@@ -5,115 +5,101 @@ interface Props { docId: string | null }
 
 export default function PdfEditorView({ docId }: Props) {
   const container = useRef<HTMLDivElement>(null);
-  const viewer    = useRef<any>(null);
+  const instance  = useRef<any>(null);
   const btnRef    = useRef<HTMLButtonElement | null>(null);
 
-  // Initialize/dispose WebViewer
+  /* ─ Initialise ONCE (React-18 strict-mode proof) ─ */
   useEffect(() => {
-    if (!container.current) return;
-
-    // Clean up any existing instance before creating a new one
-    if (viewer.current) {
-      viewer.current.dispose();
-      viewer.current = null;
-    }
+    if (!container.current || instance.current) return;   // already initialised
 
     WebViewer(
       {
-        path: '/pdfjs-express',
+        path      : '/pdfjs-express',      // make sure this folder is in /public
         licenseKey: '7VPVv7vHAjudWJUtAoEU',
-        config: { theme: 'dark' }
+        config    : { theme: 'dark' },
       },
       container.current
     ).then((inst: any) => {
-      viewer.current = inst;
+      instance.current = inst;
       inst.UI.setTheme('dark');
 
-      // Allow floating button inside iframe
+      /* style tweaks so our floating button can escape iframe bounds */
       Object.assign(container.current!.style, {
-        position:  'relative',
-        overflow:  'visible'
+        position : 'relative',
+        overflow : 'visible',
       });
 
-      // Create the “➕ Add to chat” button
+      /* floating “Add to chat” button ------------------------------ */
       const iwin = inst.UI.iframeWindow;
       const idoc = iwin.document;
       const btn  = idoc.createElement('button');
       btn.textContent = '➕ Add to chat';
       Object.assign(btn.style, {
-        position:    'absolute',
-        padding:     '4px 8px',
-        fontSize:    '12px',
-        background:  '#7C3AED',
-        color:       '#fff',
-        border:      'none',
-        borderRadius:'4px',
-        cursor:      'pointer',
-        display:     'none',
-        zIndex:      10000,
+        position      : 'absolute',
+        padding       : '4px 8px',
+        fontSize      : '12px',
+        background    : '#7C3AED',
+        color         : '#fff',
+        border        : 'none',
+        borderRadius  : '4px',
+        cursor        : 'pointer',
+        display       : 'none',
+        zIndex        : 10_000,
       });
       idoc.body.appendChild(btn);
       btnRef.current = btn;
 
-      // On click → dispatch selection event
       btn.addEventListener('click', () => {
-        const dv  = inst.Core.documentViewer as any;
-        const sel = iwin.getSelection()?.toString().trim() || '';
-        if (!sel || !docId) return;
+        if (!docId) return;
+        const sel = iwin.getSelection()?.toString().trim();
+        if (!sel) return;
 
+        const dv       = inst.Core.documentViewer as any;
         const filename = dv.getDocument()?.getFilename?.() || docId;
         const quads    = dv.getSelectionQuads?.() ?? [];
-        const page     = quads.length
-          ? quads[0].PageNumber
-          : dv.getCurrentPage?.() || 1;
-
-        let start = 0, end = 0;
-        if (quads.length) {
-          const lineH = 10;
-          const ys    = quads.flatMap((q: any) =>
-            q.Quads.map((qq: any) => qq.y1)
-          );
-          start = Math.round(Math.min(...ys) / lineH) + 1;
-          end   = Math.round(Math.max(...ys) / lineH) + 1;
-        }
+        const page     = quads.length ? quads[0].PageNumber
+                                      : dv.getCurrentPage?.() || 1;
 
         window.dispatchEvent(new CustomEvent('add-selection-to-chat', {
-          detail: { docId, filename, text: sel, page, start, end }
+          detail: { docId, filename, text: sel, page, start: 0, end: 0 }
         }));
 
         btn.style.display = 'none';
         iwin.getSelection()?.removeAllRanges();
       });
 
-      // Show button on text selection
+      /* show button when user selects text */
       idoc.addEventListener('mouseup', () => {
         setTimeout(() => {
-          const sel = iwin.getSelection()?.toString().trim() || '';
-          if (!sel) {
+          const r = iwin.getSelection();
+          if (!r || r.toString().trim() === '') {
             btn.style.display = 'none';
             return;
           }
-          const range = iwin.getSelection()!.getRangeAt(0);
-          const rect  = range.getBoundingClientRect();
+          const rect = r.getRangeAt(0).getBoundingClientRect();
           btn.style.left    = `${rect.left}px`;
           btn.style.top     = `${rect.bottom + 6}px`;
           btn.style.display = 'block';
         }, 10);
       });
 
-      // Load initial document
-      if (docId) {
-        inst.UI.loadDocument(`/api/${docId}.pdf`);
-      }
+      /* initial load */
+      if (docId) inst.UI.loadDocument(`/api/${docId}.pdf`);
     });
 
-    // Dispose on unmount
+    /* dispose on unmount */
     return () => {
-      if (viewer.current) {
-        viewer.current.dispose();
-        viewer.current = null;
-      }
+      instance.current?.dispose();
+      instance.current = null;
     };
+  }, []);
+
+  /* ─ Switch PDF when docId changes ─ */
+  useEffect(() => {
+    if (instance.current && docId) {
+      instance.current.UI.loadDocument(`/api/${docId}.pdf`);
+      btnRef.current && (btnRef.current.style.display = 'none');
+    }
   }, [docId]);
 
   return (

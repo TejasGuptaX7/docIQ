@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import { toast } from '@/components/ui/use-toast';
 import { Upload, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,19 +8,25 @@ import {
   SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 
+declare global {
+  interface Window {
+    uploadcare: any;
+  }
+}
+
 interface Props {
   currentWorkspace: string;
   workspaces: string[];
-  onUploaded: () => void;
+  onUploaded: () => void;          // ← callback from parent
 }
 
-declare global { interface Window { uploadcare: any; refetchDocs?: () => void; } }
-
 export default function UploadButton({ currentWorkspace, workspaces, onUploaded }: Props) {
-  const fileRef = useRef<HTMLInputElement>(null);
+  const { getToken }          = useAuth();
+  const fileRef               = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
-  const [ws, setWs] = useState(currentWorkspace);
+  const [ws, setWs]           = useState(currentWorkspace);
 
+  /* — Local helpers — */
   const handleSelect = () => fileRef.current?.click();
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,42 +34,79 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
     if (!file) return;
     setLoading(true);
 
-    const body = new FormData();
-    body.append('file', file);
-    body.append('workspace', ws);
-
     try {
-      const res = await fetch('/api/upload', { method:'POST', body });
-      if (!res.ok) throw new Error('Upload failed');
-      toast({ title:'Uploaded ✔︎', description:file.name });
-      onUploaded();
-      window.refetchDocs?.();                       // refresh list
-    } catch(err:any){
-      toast({ title:'Upload error', description:err.message, variant:'destructive'});
-    } finally { setLoading(false); }
+      const token = await getToken();
+      const body  = new FormData();
+      body.append('file', file);
+      body.append('workspace', ws);
+
+      const res = await fetch('/api/upload', {
+        method : 'POST',
+        body,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const result = await res.json();
+      toast({
+        title      : 'Uploaded ✔︎',
+        description: `${file.name} (${result.chunks} chunks, ${result.words} words)`
+      });
+
+      onUploaded();                       // ← HERE  🎉
+    } catch (err: any) {
+      toast({
+        title      : 'Upload error',
+        description: err.message,
+        variant    : 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCloudConnect = () => {
+  const handleCloudConnect = async () => {
+    const token = await getToken();
     const widget = window.uploadcare.openDialog(null, {
       tabs: 'file url gdrive dropbox onedrive',
     });
-    widget.done((fileInfo: any) => {
-      fetch('/api/upload/external', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body:JSON.stringify({ url:fileInfo.cdnUrl, name:fileInfo.name, workspace:ws }),
-      }).then(() => {
-        toast({ title:'Cloud file connected ✔︎', description:fileInfo.name });
-        onUploaded();
-        window.refetchDocs?.();                     // refresh list
-      });
+
+    widget.done(async (fileInfo: any) => {
+      try {
+        const res = await fetch('/api/upload/external', {
+          method : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization : `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            url      : fileInfo.cdnUrl,
+            name     : fileInfo.name,
+            workspace: ws,
+          }),
+        });
+
+        if (!res.ok) throw new Error('Cloud upload failed');
+        toast({ title: 'Cloud file connected ✔︎', description: fileInfo.name });
+
+        onUploaded();                     // ← HERE  🎉
+      } catch (err: any) {
+        toast({
+          title      : 'Cloud upload error',
+          description: err.message,
+          variant    : 'destructive',
+        });
+      }
     });
   };
 
+  /* — JSX — */
   return (
     <>
       <input type="file" hidden ref={fileRef} onChange={handleUpload}
-             accept=".pdf,.doc,.docx,.txt"/>
+             accept=".pdf,.doc,.docx,.txt" />
+
       <div className="flex items-center gap-2">
         <Select value={ws} onValueChange={setWs}>
           <SelectTrigger className="w-28 h-8 text-xs">
@@ -76,11 +120,12 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
         </Select>
 
         <Button size="sm" variant="outline" onClick={handleSelect} disabled={loading}>
-          <Upload className="w-4 h-4 mr-1"/>{loading ? '…' : 'Upload'}
+          <Upload className="w-4 h-4 mr-1" />
+          {loading ? '…' : 'Upload'}
         </Button>
 
         <Button size="sm" variant="outline" onClick={handleCloudConnect}>
-          <UploadCloud className="w-4 h-4 mr-1"/> Connect Cloud
+          <UploadCloud className="w-4 h-4 mr-1" /> Connect&nbsp;Cloud
         </Button>
       </div>
     </>

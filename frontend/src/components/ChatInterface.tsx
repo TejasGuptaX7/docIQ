@@ -1,8 +1,7 @@
-// src/components/ChatInterface.tsx
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import { Button, Input, Card, Badge } from '@/components/ui';
-import { Send, User, Brain, FileText, X } from 'lucide-react';
+import { Button, Input, Card, Badge, Switch, Label } from '@/components/ui';
+import { Send, Brain, Globe } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 interface Props { selectedDoc: string | null }
@@ -16,58 +15,54 @@ interface Msg {
 }
 
 interface Snip {
-  id:       string;
-  docId:    string;
+  id: string;
+  docId: string;
   filename: string;
-  text:     string;
-  page:     number;
-  start:    number;
-  end:      number;
+  text: string;
+  page: number;
+  start: number;
+  end: number;
 }
 
-/* helper: shorten long filenames */
 const shorten = (s?: string) =>
   s && s.length > 18 ? `${s.slice(0, 14)}…${s.slice(-3)}` : (s ?? 'untitled');
 
 export default function ChatInterface({ selectedDoc }: Props) {
   const { getToken } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([{
-    id: 'sys', type: 'ai',
+    id: 'sys',
+    type: 'ai',
     content: "Hello! I'm your AI assistant. Ask me about your documents.",
     timestamp: new Date(),
   }]);
   const [snips, setSnips]   = useState<Snip[]>([]);
   const [input, setInput]   = useState('');
   const [typing, setTyping] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const [global, setGlobal] = useState(false);
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     const onAdd = (e: any) => {
-      const d = e.detail;
-      const s: Snip = {
-        id: crypto.randomUUID(),
-        docId: d.docId,
-        filename: d.filename || 'untitled.pdf',
-        text: d.text,
-        page: d.page,
-        start: d.start,
-        end: d.end
-      };
-      setSnips(p => [...p, s]);
+      const d = e.detail as Snip;
+      setSnips(p => [...p, { ...d, id: crypto.randomUUID() }]);
     };
     window.addEventListener('add-selection-to-chat', onAdd);
     return () => window.removeEventListener('add-selection-to-chat', onAdd);
   }, []);
 
   const ctxString = () =>
-    snips.map(s => `[${s.filename} p.${s.page} ${s.start}-${s.end}] ${s.text}`)
-         .join('\n\n');
+    snips
+      .map(s => `[${shorten(s.filename)} p.${s.page} ${s.start}-${s.end}] ${s.text}`)
+      .join('\n\n');
 
   const send = async () => {
     const q = (ctxString() + '\n\n' + input).trim();
-    if (!q || !selectedDoc) return;
+    if (!q) return;
+    if (!global && !selectedDoc) return;
 
     setMessages(m => [...m, {
       id: crypto.randomUUID(),
@@ -75,19 +70,25 @@ export default function ChatInterface({ selectedDoc }: Props) {
       content: input,
       timestamp: new Date()
     }]);
-    setInput(''); setSnips([]); setTyping(true);
+    setInput('');
+    setSnips([]);
+    setTyping(true);
 
     try {
       const token = await getToken();
-      const r = await fetch('/api/search', {
+      const res = await fetch('/api/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ query: q, docId: selectedDoc }),
+        body: JSON.stringify({
+          query: q,
+          docId: global ? '' : selectedDoc
+        }),
       });
-      const data = await r.json();
+
+      const data    = await res.json();
       const answer  = data.error ?? data.answer ?? 'No response.';
       const sources = data.sources;
 
@@ -103,17 +104,18 @@ export default function ChatInterface({ selectedDoc }: Props) {
       [...answer].forEach((ch, i) =>
         setTimeout(() =>
           setMessages(m =>
-            m.map(x =>
-              x.id === aiId
-                ? { ...x, content: answer.slice(0, i + 1) }
-                : x
+            m.map(msg =>
+              msg.id === aiId
+                ? { ...msg, content: answer.slice(0, i + 1) }
+                : msg
             )
-          )
-        , i * 20)
+          ), i * 18)
       );
-      setTimeout(() => setTyping(false), answer.length * 20 + 100);
 
-    } catch {
+      setTimeout(() => setTyping(false), answer.length * 18 + 100);
+
+    } catch (err) {
+      console.error(err);
       setMessages(m => [...m, {
         id: crypto.randomUUID(),
         type: 'ai',
@@ -126,74 +128,58 @@ export default function ChatInterface({ selectedDoc }: Props) {
 
   return (
     <div className="h-full flex flex-col">
-      {!selectedDoc ? (
+      {/* Always show the toggle at the top */}
+      <div className="px-4 py-2 border-b flex justify-end items-center gap-2">
+        <Globe className="w-4 h-4 opacity-60" />
+        <Switch id="scope" checked={global} onCheckedChange={setGlobal} />
+        <Label htmlFor="scope" className="cursor-pointer select-none">
+          {global ? 'All docs' : 'Current doc'}
+        </Label>
+      </div>
+
+      {!selectedDoc && !global ? (
         <div className="flex-1 flex items-center justify-center">
           <Card className="p-8 max-w-md text-center">
             <Brain className="w-12 h-12 mx-auto mb-4" />
-            <p>Select or upload a document to begin.</p>
+            <p>Select a document or switch to "All docs" mode above to begin.</p>
           </Card>
         </div>
       ) : (
         <>
           <ScrollArea className="flex-1 mb-4">
-            <div className="space-y-6 pb-4">
-              {messages.map(m => (
-                <div key={m.id} className={`flex ${m.type==='user'?'justify-end':''}`}>
-                  <div className={`flex items-start space-x-3 max-w-3xl ${m.type==='user'?'flex-row-reverse space-x-reverse':''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${m.type==='user'?'bg-primary text-white':'bg-gradient-to-r from-purple-500 to-pink-500 text-white'}`}>
-                      {m.type==='user' ? <User className="w-4 h-4"/> : <Brain className="w-4 h-4"/>}
-                    </div>
-                    <div className="flex-1">
-                      <Card className={m.type==='user'?'bg-primary text-white p-4':'p-4'}>
-                        <p className="whitespace-pre-wrap">{m.content}</p>
-                        {m.sources?.length && (
-                          <div className="mt-3 space-y-2">
-                            {m.sources.map((s, i) => (
-                              <Card key={i} className="p-3 bg-muted/50">
-                                <Badge variant="outline" className="text-xs mr-2">
-                                  <FileText className="w-3 h-3 mr-1"/>Page {s.page}
-                                </Badge>
-                                <span className="text-xs">{s.excerpt}</span>
-                              </Card>
-                            ))}
-                          </div>
-                        )}
-                      </Card>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {m.timestamp.toLocaleTimeString()}
-                      </p>
-                    </div>
+            {messages.map(msg => (
+              <div key={msg.id} className={`px-4 py-2 ${msg.type === 'user' ? 'text-right' : ''}`}>
+                <span className={`inline-block ${msg.type === 'ai' ? 'bg-gray-800' : 'bg-gray-600'} rounded px-3 py-2`}>
+                  {msg.content}
+                </span>
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    Sources:{' '}
+                    {msg.sources.map((s, i) => (
+                      <span key={i}>
+                        Page {s.page} ({Math.round(s.confidence * 100)}%)
+                        {i < msg.sources.length - 1 && ', '}
+                      </span>
+                    ))}
                   </div>
-                </div>
-              ))}
-              {typing && (
-  <div className="px-4 flex items-center gap-2 text-sm text-muted-foreground">
-    <span className="loader" /> AI is typing…
-  </div>)}
-            </div>
+                )}
+              </div>
+            ))}
             <div ref={endRef} />
             <ScrollBar orientation="vertical" />
           </ScrollArea>
-
           <div className="border-t pt-3">
-            {!!snips.length && (
-              <div className="flex flex-wrap gap-2 px-4 pb-2">
-                {snips.map(s => (
-                  <Badge key={s.id} variant="secondary" className="py-1 pr-1 pl-2 flex items-center gap-1">
-                    {shorten(s.filename)} (p{s.page} • {s.start}-{s.end})
-                    <button onClick={() => setSnips(x => x.filter(y => y.id!==s.id))}>
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-3 px-4 pb-4">
+            <div className="flex gap-3 px-4 pb-4 items-center">
               <Input
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Ask anything…"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder={global ? "Ask about all your documents…" : "Ask about this document…"}
               />
               <Button size="icon" disabled={typing || (!input.trim() && !snips.length)} onClick={send}>
                 <Send className="w-4 h-4" />

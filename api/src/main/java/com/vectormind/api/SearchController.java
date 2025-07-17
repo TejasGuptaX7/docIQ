@@ -2,6 +2,8 @@ package com.vectormind.api;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
@@ -11,139 +13,282 @@ import java.util.*;
 @RequestMapping("/api")
 public class SearchController {
 
-  private final RestTemplate rest = new RestTemplate();
+  private final RestTemplate rest;
 
   @Value("${openai.api.key:}")
   private String cfgKey;
 
+  public SearchController(RestTemplate rest) {
+    this.rest = rest;
+  }
+
+  private String getUserId(Authentication auth) {
+    if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+      String userId = jwt.getSubject();
+      System.out.println("[SearchController] Extracted EXACT userId: '" + userId + "'");
+      return userId;
+    }
+    throw new RuntimeException("User not authenticated");
+  }
+
   @PostMapping("/search")
-  public ResponseEntity<?> search(@RequestBody Map<String, String> body) {
+  public ResponseEntity<?> search(@RequestBody Map<String, String> body, Authentication auth) {
+    String userId = getUserId(auth);
+    String query  = Optional.ofNullable(body.get("query")).orElse("").trim();
+    String docId  = Optional.ofNullable(body.get("docId")).orElse("").trim();
+
+    // Add logging
+    System.out.println("[SearchController] ====== SEARCH REQUEST ======");
+    System.out.println("[SearchController] userId: '" + userId + "'");
+    System.out.println("[SearchController] query: '" + query + "'");
+    System.out.println("[SearchController] docId: '" + docId + "'");
+    System.out.println("[SearchController] isGlobal: " + docId.isBlank());
+    System.out.println("[SearchController] ==========================");
+
+    if (query.isBlank()) {
+      return ResponseEntity.badRequest().body(Map.of("error", "missing query"));
+    }
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    // 1) get embedding vector
+    Map<String,Object> embedReq = Map.of("texts", List.of(query));
+    List<?> vector;
     try {
-      // 1 — Read and trim inputs, never null
-      String query = Optional.ofNullable(body.get("query")).orElse("").trim();
-      String docId  = Optional.ofNullable(body.get("docId")).orElse("").trim();
-
-      // —— Logging for debugging ——
-      System.out.println("[SearchController] incoming query=\"" + query + "\" docId=\"" + docId + "\"");
-
-      // 2 — Validate inputs
-      if (query.isBlank() || docId.isBlank()) {
-        return ResponseEntity
-          .badRequest()
-          .body(Map.of("error", "missing query or docId"));
-      }
-
-      // 3 — Embed the query
-      HttpHeaders hJson = new HttpHeaders();
-      hJson.setContentType(MediaType.APPLICATION_JSON);
-      Map<String, Object> eReq = Map.of("texts", List.of(query));
-      List<?> vec = (List<?>)
-        ((Map<?, ?>) rest.postForObject(
+      @SuppressWarnings("unchecked")
+      List<?> embeddings = (List<?>)
+        ((Map<?,?>) rest.postForObject(
           "http://localhost:5001/embed",
-          new HttpEntity<>(eReq, hJson),
+          new HttpEntity<>(embedReq, headers),
           Map.class
         )).get("embeddings");
-      List<?> vector = (List<?>) vec.get(0);
+      vector = (List<?>) embeddings.get(0);
+      System.out.println("[SearchController] Got embedding vector of length: " + vector.size());
+    } catch (Exception e) {
+      System.err.println("[SearchController] Embedding failed: " + e.getMessage());
+      e.printStackTrace();
+      // fallback to pure AI if embedding fails
+      return callOpenAI(query, headers);
+    }
 
-      // 4 — Build GraphQL query, scoped to this docId
-      String gql =
-        "{"
-      + " Get {"
-      + "   Chunk("
-      + "     where: { path: [\"docId\"], operator: Equal, valueText: \"" 
-                    + docId.replace("\"","\\\"") 
-                + "\" }"
-      + "     nearVector: { vector: " + vector.toString() + " }"
-      + "     limit: 4"
-      + "   ) {"
-      + "     text"
-      + "     page"
-      + "     _additional { certainty }"
-      + "   }"
-      + " }"
-      + "}";
+    // 2) build GraphQL 'where' filter - FIXED VERSION
+    String whereClause;
+    if (!docId.isBlank()) {
+      // Search within specific document
+      whereClause = String.format(
+        "operator: And, operands: [" +
+        "{ path: [\"userId\"], operator: Equal, valueText: \"%s\" }, " +
+        "{ path: [\"docId\"], operator: Equal, valueText: \"%s\" }]",
+        userId.replace("\"", "\\\""),
+        docId.replace("\"", "\\\"")
+      );
+    } else {
+      // Global search - only filter by userId
+      whereClause = String.format(
+        "path: [\"userId\"], operator: Equal, valueText: \"%s\"",
+        userId.replace("\"", "\\\"")
+      );
+    }
 
-      System.out.println("[SearchController] GraphQL payload: " + gql);
+    // 3) build and send GraphQL query
+    String gql = String.format("""
+      {
+        Get {
+          Chunk(
+            where: { %s }
+            nearVector: { vector: %s }
+            limit: 4
+          ) {
+            text
+            page
+            docId
+            userId
+            _additional { certainty }
+          }
+        }
+      }
+      """, whereClause, vector.toString());
 
-      Map<?, ?> weav = rest.postForObject(
+    // Log the GraphQL query
+    System.out.println("[SearchController] GraphQL query:");
+    System.out.println(gql);
+    System.out.println("[SearchController] ==========================");
+
+    Map<?,?> weav;
+    try {
+      weav = rest.postForObject(
         "http://localhost:8080/v1/graphql",
-        new HttpEntity<>(Map.of("query", gql), hJson),
+        new HttpEntity<>(Map.of("query", gql), headers),
         Map.class
       );
-
-      @SuppressWarnings("unchecked")
-      List<Map<String, Object>> chunks = (List<Map<String, Object>>)
-        ((Map<?, ?>) ((Map<?, ?>) weav.get("data")).get("Get")).get("Chunk");
-
-      // 5 — Fallback if no chunks found
-      if (chunks == null || chunks.isEmpty()) {
-        return callOpenAI(query, hJson);
-      }
-
-      // 6 — Build context and call OpenAI
-      StringBuilder ctx = new StringBuilder();
-      for (Map<String, Object> c : chunks) {
-        ctx.append("Page ")
-           .append(c.get("page"))
-           .append(": ")
-           .append(c.get("text"))
-           .append("\n\n");
-      }
-      return callOpenAI("Context:\n" + ctx + "\n\nQuestion:\n" + query, hJson);
-
+      System.out.println("[SearchController] Weaviate raw response: " + weav);
     } catch (Exception e) {
+      System.err.println("[SearchController] Weaviate query failed: " + e.getMessage());
       e.printStackTrace();
-      return ResponseEntity
-        .status(HttpStatus.INTERNAL_SERVER_ERROR)
-        .body(Map.of("error", "backend error"));
+      return callOpenAI(query, headers);
+    }
+
+    @SuppressWarnings("unchecked")
+    List<Map<String,Object>> chunks = (List<Map<String,Object>>)
+      ((Map<?,?>) ((Map<?,?>) weav.get("data")).get("Get")).get("Chunk");
+
+    // Log the results
+    System.out.println("[SearchController] Found " + 
+                       (chunks != null ? chunks.size() : 0) + " chunks");
+    if (chunks != null && !chunks.isEmpty()) {
+      System.out.println("[SearchController] First chunk:");
+      System.out.println("  docId: " + chunks.get(0).get("docId"));
+      System.out.println("  userId: " + chunks.get(0).get("userId"));
+      System.out.println("  text preview: " + 
+        String.valueOf(chunks.get(0).get("text")).substring(0, 
+          Math.min(100, String.valueOf(chunks.get(0).get("text")).length())) + "...");
+    }
+
+    // 4) if no context, fallback to AI
+    if (chunks == null || chunks.isEmpty()) {
+      System.out.println("[SearchController] No chunks found, falling back to OpenAI");
+      return callOpenAI(query, headers);
+    }
+
+    // 5) build prompt with context
+    StringBuilder ctx = new StringBuilder();
+    List<Map<String, Object>> sources = new ArrayList<>();
+    
+    for (var c : chunks) {
+      ctx.append("Page ").append(c.get("page")).append(": ").append(c.get("text")).append("\n\n");
+      
+      // Add source information
+      Map<String, Object> source = new HashMap<>();
+      source.put("page", c.get("page"));
+      source.put("excerpt", String.valueOf(c.get("text")).substring(0, Math.min(100, String.valueOf(c.get("text")).length())) + "...");
+      source.put("confidence", ((Map<?,?>) c.get("_additional")).get("certainty"));
+      sources.add(source);
+    }
+    
+    // Call OpenAI with context
+    ResponseEntity<?> aiResponse = callOpenAI("Context:\n" + ctx + "\n\nQuestion:\n" + query, headers);
+    
+    // Add sources to response
+    if (aiResponse.getStatusCode() == HttpStatus.OK && aiResponse.getBody() instanceof Map) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> responseBody = new HashMap<>((Map<String, Object>) aiResponse.getBody());
+      responseBody.put("sources", sources);
+      return ResponseEntity.ok(responseBody);
+    }
+    
+    return aiResponse;
+  }
+
+  @GetMapping("/debug/weaviate-count")
+  public ResponseEntity<?> debugWeaviate(Authentication auth) {
+    String userId = getUserId(auth);
+    
+    System.out.println("[Debug] ====== WEAVIATE DEBUG ======");
+    System.out.println("[Debug] Checking Weaviate for userId: '" + userId + "'");
+    
+    // Count all documents for user
+    String gql = String.format("""
+        {
+          Aggregate {
+            Document(where: {
+              path: ["userId"],
+              operator: Equal,
+              valueText: "%s"
+            }) {
+              meta { count }
+              source { 
+                count 
+                topOccurrences(limit: 10) { 
+                  value 
+                  occurs 
+                } 
+              }
+              workspace {
+                count
+                topOccurrences(limit: 10) {
+                  value
+                  occurs
+                }
+              }
+            }
+            Chunk(where: {
+              path: ["userId"],
+              operator: Equal,
+              valueText: "%s"
+            }) {
+              meta { count }
+              docId {
+                count
+                topOccurrences(limit: 5) {
+                  value
+                  occurs
+                }
+              }
+            }
+          }
+        }
+        """, userId.replace("\"", "\\\""), userId.replace("\"", "\\\""));
+    
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    
+    System.out.println("[Debug] GraphQL query:");
+    System.out.println(gql);
+    
+    try {
+      Map<?, ?> response = rest.postForObject(
+          "http://localhost:8080/v1/graphql",
+          new HttpEntity<>(Map.of("query", gql), headers),
+          Map.class
+      );
+      
+      System.out.println("[Debug] Weaviate response: " + response);
+      System.out.println("[Debug] =============================");
+      
+      return ResponseEntity.ok(response);
+    } catch (Exception e) {
+      System.err.println("[Debug] Weaviate query failed: " + e.getMessage());
+      e.printStackTrace();
+      return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
     }
   }
 
-  /**
-   * Helper to invoke OpenAI ChatCompletion with either pure query
-   * or with context+query. Returns full answer + empty sources list.
-   */
-  private ResponseEntity<?> callOpenAI(String prompt, HttpHeaders hJson) {
+  private ResponseEntity<?> callOpenAI(String prompt, HttpHeaders headers) {
     String key = !cfgKey.isBlank() ? cfgKey : System.getenv("OPENAI_API_KEY");
     if (key == null || key.isBlank()) {
-      return ResponseEntity
-        .status(HttpStatus.INTERNAL_SERVER_ERROR)
-        .body(Map.of("error", "OpenAI key not set"));
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                           .body(Map.of("error","OpenAI key not configured"));
     }
+    headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+    headers.setBearerAuth(key);
 
-    HttpHeaders oh = new HttpHeaders();
-    oh.setContentType(MediaType.APPLICATION_JSON);
-    oh.setBearerAuth(key);
-
-    Map<String, Object> oaReq = Map.of(
-      "model", "gpt-4o-mini",
+    Map<String,Object> req = Map.of(
+      "model","gpt-4o-mini",
       "messages", List.of(
-        Map.of(
-          "role", "system",
-          "content",
-          "You are a helpful assistant. Answer from context if provided; otherwise from your general knowledge."
-        ),
-        Map.of("role", "user", "content", prompt)
+        Map.of("role","system","content","You are a helpful assistant."),
+        Map.of("role","user","content",prompt)
       ),
-      "temperature", 0.2,
-      "max_tokens", 512
+      "temperature",0.2,
+      "max_tokens",512
     );
 
-    Map<?, ?> oa = rest.postForObject(
-      "https://api.openai.com/v1/chat/completions",
-      new HttpEntity<>(oaReq, oh),
-      Map.class
-    );
-
-    @SuppressWarnings("unchecked")
-    Map<String, Object> choice = (Map<String, Object>) ((List<?>) oa.get("choices")).get(0);
-    @SuppressWarnings("unchecked")
-    Map<String, Object> message = (Map<String, Object>) choice.get("message");
-    String answer = (String) message.get("content");
-
-    return ResponseEntity.ok(Map.of(
-      "answer", answer.trim(),
-      "sources", List.of()  // no PDF sources when falling back
-    ));
+    try {
+      @SuppressWarnings("unchecked")
+      Map<?,?> resp = rest.postForObject(
+        "https://api.openai.com/v1/chat/completions",
+        new HttpEntity<>(req, headers),
+        Map.class
+      );
+      @SuppressWarnings("unchecked")
+      Map<String,Object> choice = (Map<String,Object>) ((List<?>) resp.get("choices")).get(0);
+      String answer = (String) ((Map<?,?>) choice.get("message")).get("content");
+      return ResponseEntity.ok(Map.of("answer",answer.trim(),"sources",List.of()));
+    } catch (Exception e) {
+      System.err.println("[SearchController] OpenAI call failed: " + e.getMessage());
+      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                           .body(Map.of("error","AI response failed: "+e.getMessage()));
+    }
   }
 }

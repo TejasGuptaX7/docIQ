@@ -1,8 +1,13 @@
-import { useLocation } from "react-router-dom";
+// src/pages/NotFound.tsx
+import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { GlassCard } from "@/components/GlassCard";
+import { Home, Search } from "lucide-react";
 
 const NotFound = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     console.error(
@@ -12,14 +17,35 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">404</h1>
-        <p className="text-xl text-gray-600 mb-4">Oops! Page not found</p>
-        <a href="/" className="text-blue-500 hover:text-blue-700 underline">
-          Return to Home
-        </a>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-main px-4">
+      <GlassCard variant="feature" className="max-w-md w-full p-8 text-center">
+        <div className="mb-6">
+          <h1 className="text-8xl font-mono font-bold text-primary mb-4">404</h1>
+          <p className="text-2xl font-mono text-foreground mb-2">Page Not Found</p>
+          <p className="text-muted-foreground">
+            Oops! The page you're looking for doesn't exist.
+          </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button 
+            variant="default" 
+            onClick={() => navigate('/')}
+            className="font-mono"
+          >
+            <Home className="h-4 w-4" />
+            Back to Home
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/dashboard')}
+            className="font-mono"
+          >
+            <Search className="h-4 w-4" />
+            Go to Dashboard
+          </Button>
+        </div>
+      </GlassCard>
     </div>
   );
 };

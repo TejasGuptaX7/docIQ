@@ -4,6 +4,62 @@
 
 /* ───────── VectorMind / DocIQ Design System ───────── */
 @layer base {
+  :root {
+    /* Dark glassmorphism design system */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 300 77% 75%;
+    --primary-foreground: 240 10% 3.9%;
+
+    --secondary: 240 10% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 10% 10%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 300 77% 75%;
+    --accent-foreground: 240 10% 3.9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 20% 15%;
+    --input: 240 20% 10%;
+    --ring: 300 77% 75%;
+
+    --radius: 0.75rem;
+
+    /* Glassmorphism specific variables */
+    --glass-bg: 240 10% 15%;
+    --glass-border: 240 20% 25%;
+    --glass-shadow: 0 8px 32px 0;
+    --glass-shadow-color: 0 0% 0% / 0.37;
+    
+    /* Gradient backgrounds */
+    --gradient-bg: linear-gradient(135deg, hsl(240 10% 3.9%) 0%, hsl(260 20% 8%) 50%, hsl(280 30% 12%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(240 10% 15% / 0.2) 0%, hsl(260 20% 20% / 0.15) 100%);
+    
+    /* Animation variables */
+    --typing-speed: 3s;
+    --cursor-blink: 1s;
+
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 300 77% 75%;
+    --sidebar-primary-foreground: 240 10% 3.9%;
+    --sidebar-accent: 240 10% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 20% 15%;
+    --sidebar-ring: 300 77% 75%;
+  }
+
   .dark {
     --background: 0 0% 6%;
     --foreground: 210 20% 90%;
@@ -45,11 +101,22 @@
   }
 
   body {
-    @apply bg-background text-foreground font-inter;
+    @apply bg-background text-foreground;
   }
 }
 
 @layer components {
+  /* Gradient backgrounds */
+  .bg-gradient-main {
+    @apply bg-gradient-to-br from-background via-background/95 to-background;
+    background-image: var(--gradient-bg);
+  }
+
+  .bg-gradient-card {
+    background-image: var(--gradient-card);
+  }
+
+  /* Glass morphism effects */
   .glass-background {
     @apply bg-gradient-to-br from-[#0e0e10] via-[#1a1a1d] to-[#0e0e10] backdrop-blur-lg;
   }
@@ -58,20 +125,139 @@
     @apply bg-white/10 backdrop-blur-md border border-white/20;
   }
 
+  .bg-glass {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .backdrop-blur-glass {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .border-glass-border {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .shadow-glass {
+    box-shadow: var(--glass-shadow) var(--glass-shadow-color);
+  }
+
+  /* Neon and glow effects */
   .neon-glow {
     box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 0 40px rgba(139, 92, 246, 0.1);
   }
 
+  .shadow-glow {
+    box-shadow: 0 0 30px rgba(var(--primary), 0.5);
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  /* Text effects */
   .text-gradient {
     @apply bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500 bg-clip-text text-transparent;
   }
 
+  .animate-gradient-x {
+    animation: gradient-x 15s ease infinite;
+  }
+
+  /* Floating shapes */
   .floating-shape {
     @apply absolute opacity-20 animate-float;
   }
 
+  /* PDF container */
   .pdf-container canvas {
     @apply shadow-md mb-2;
+  }
+
+  /* Animations */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out;
+  }
+
+  .animate-cursor-blink {
+    animation: cursor-blink var(--cursor-blink) infinite;
+  }
+
+  /* Font styles */
+  .font-inter {
+    font-family: 'Inter', sans-serif;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', 'Inter', monospace;
+  }
+
+  .font-space {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+}
+
+/* === Animations === */
+@keyframes float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-size: 200% 200%;
+    background-position: left center;
+  }
+  50% {
+    background-size: 200% 200%;
+    background-position: right center;
+  }
+}
+
+@keyframes glow {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cursor-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
   }
 }
 
@@ -100,37 +286,6 @@
 }
 .word {
   display: inline-block;
-}
-
-/* === Floating Animation === */
-@keyframes float {
-  0% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-/* === Scale In === */
-@keyframes scale-in {
-  0% {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-.animate-scale-in {
-  animation: scale-in 0.2s ease-out;
 }
 
 /* ─────── Added Overrides for Clerk / PDF.js / Uploadcare ─────── */

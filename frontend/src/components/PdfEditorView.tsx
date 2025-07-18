@@ -1,111 +1,160 @@
-import { useEffect, useRef } from 'react';
+// src/components/PdfEditorView.tsx
+import { useEffect, useRef, useState } from 'react';
 import WebViewer from '@pdftron/pdfjs-express-viewer';
 
-interface Props { docId: string | null }
+interface Doc {
+  _additional: { id: string };
+  title: string | null;
+  pages: number | null;
+  source?: string;
+  workspace?: string;
+}
 
-export default function PdfEditorView({ docId }: Props) {
-  const container = useRef<HTMLDivElement>(null);
-  const instance  = useRef<any>(null);
-  const btnRef    = useRef<HTMLButtonElement | null>(null);
+interface Props { 
+  docId: string | null;
+  docs?: Doc[];
+}
 
-  /* ─ Initialise ONCE (React-18 strict-mode proof) ─ */
+export default function PdfEditorView({ docId, docs = [] }: Props) {
+  const viewerDiv = useRef<HTMLDivElement>(null);
+  const instance = useRef<any>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Initialize WebViewer only once
   useEffect(() => {
-    if (!container.current || instance.current) return;   // already initialised
+    if (!viewerDiv.current || isInitialized) return;
 
     WebViewer(
       {
-        path      : '/pdfjs-express',      // make sure this folder is in /public
+        path: '/pdfjs-express',
         licenseKey: '7VPVv7vHAjudWJUtAoEU',
-        config    : { theme: 'dark' },
+        initialDoc: docId ? `/api/${docId}.pdf` : undefined,
       },
-      container.current
+      viewerDiv.current
     ).then((inst: any) => {
       instance.current = inst;
+      setIsInitialized(true);
+      
+      // Apply dark theme
       inst.UI.setTheme('dark');
-
-      /* style tweaks so our floating button can escape iframe bounds */
-      Object.assign(container.current!.style, {
-        position : 'relative',
-        overflow : 'visible',
-      });
-
-      /* floating “Add to chat” button ------------------------------ */
-      const iwin = inst.UI.iframeWindow;
-      const idoc = iwin.document;
-      const btn  = idoc.createElement('button');
+      
+      // Set up the floating button for text selection
+      const { documentViewer } = inst.Core;
+      const iframeDoc = inst.UI.iframeWindow.document;
+      
+      // Create floating button
+      const btn = iframeDoc.createElement('button');
       btn.textContent = '➕ Add to chat';
-      Object.assign(btn.style, {
-        position      : 'absolute',
-        padding       : '4px 8px',
-        fontSize      : '12px',
-        background    : '#7C3AED',
-        color         : '#fff',
-        border        : 'none',
-        borderRadius  : '4px',
-        cursor        : 'pointer',
-        display       : 'none',
-        zIndex        : 10_000,
-      });
-      idoc.body.appendChild(btn);
-      btnRef.current = btn;
+      btn.style.cssText = `
+        position: absolute;
+        padding: 4px 8px;
+        font-size: 11px;
+        background: #7C3AED;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        display: none;
+        z-index: 10000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      `;
+      iframeDoc.body.appendChild(btn);
+      buttonRef.current = btn;
 
-      btn.addEventListener('click', () => {
-        if (!docId) return;
-        const sel = iwin.getSelection()?.toString().trim();
-        if (!sel) return;
-
-        const dv       = inst.Core.documentViewer as any;
-        const filename = dv.getDocument()?.getFilename?.() || docId;
-        const quads    = dv.getSelectionQuads?.() ?? [];
-        const page     = quads.length ? quads[0].PageNumber
-                                      : dv.getCurrentPage?.() || 1;
-
-        window.dispatchEvent(new CustomEvent('add-selection-to-chat', {
-          detail: { docId, filename, text: sel, page, start: 0, end: 0 }
-        }));
-
-        btn.style.display = 'none';
-        iwin.getSelection()?.removeAllRanges();
-      });
-
-      /* show button when user selects text */
-      idoc.addEventListener('mouseup', () => {
+      // Handle text selection
+      const handleMouseUp = () => {
         setTimeout(() => {
-          const r = iwin.getSelection();
-          if (!r || r.toString().trim() === '') {
+          const selection = inst.UI.iframeWindow.getSelection();
+          if (!selection || !selection.toString().trim()) {
             btn.style.display = 'none';
             return;
           }
-          const rect = r.getRangeAt(0).getBoundingClientRect();
-          btn.style.left    = `${rect.left}px`;
-          btn.style.top     = `${rect.bottom + 6}px`;
+
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          // Calculate position to keep button in viewport
+          const iframeRect = inst.UI.iframeWindow.frameElement.getBoundingClientRect();
+          let left = rect.left;
+          let top = rect.bottom + 6;
+          
+          // Adjust if button would go off-screen
+          if (left + 100 > iframeRect.width) {
+            left = iframeRect.width - 110;
+          }
+          if (left < 10) {
+            left = 10;
+          }
+          
+          btn.style.left = `${left}px`;
+          btn.style.top = `${top}px`;
           btn.style.display = 'block';
         }, 10);
+      };
+
+      // Button click handler
+      btn.addEventListener('click', () => {
+        const selection = inst.UI.iframeWindow.getSelection();
+        const text = selection?.toString().trim();
+        if (!text || !docId) return;
+
+        const currentPage = documentViewer.getCurrentPage();
+        const doc = docs.find(d => d._additional.id === docId);
+        const filename = doc?.title || 'Document';
+
+        window.dispatchEvent(new CustomEvent('add-selection-to-chat', {
+          detail: {
+            docId,
+            filename,
+            text,
+            page: currentPage,
+            start: 0,
+            end: text.length
+          }
+        }));
+
+        btn.style.display = 'none';
+        selection?.removeAllRanges();
       });
 
-      /* initial load */
-      if (docId) inst.UI.loadDocument(`/api/${docId}.pdf`);
+      iframeDoc.addEventListener('mouseup', handleMouseUp);
+      iframeDoc.addEventListener('touchend', handleMouseUp);
+      
+      // Hide button on scroll
+      inst.UI.iframeWindow.addEventListener('scroll', () => {
+        if (btn.style.display === 'block') {
+          btn.style.display = 'none';
+        }
+      });
     });
 
-    /* dispose on unmount */
+    // Cleanup function
     return () => {
-      instance.current?.dispose();
-      instance.current = null;
+      if (instance.current) {
+        instance.current.UI.dispose();
+        instance.current = null;
+        setIsInitialized(false);
+      }
     };
-  }, []);
+  }, []); // Only run once on mount
 
-  /* ─ Switch PDF when docId changes ─ */
+  // Handle document changes
   useEffect(() => {
-    if (instance.current && docId) {
+    if (instance.current && docId && isInitialized) {
       instance.current.UI.loadDocument(`/api/${docId}.pdf`);
-      btnRef.current && (btnRef.current.style.display = 'none');
+      // Hide the button when switching documents
+      if (buttonRef.current) {
+        buttonRef.current.style.display = 'none';
+      }
     }
-  }, [docId]);
+  }, [docId, isInitialized]);
 
   return (
-    <div
-      ref={container}
-      className="w-full h-[85vh] rounded-2xl shadow-lg bg-black/30 backdrop-blur-lg overflow-hidden"
+    <div 
+      ref={viewerDiv} 
+      className="w-full h-full rounded-lg overflow-hidden"
+      style={{ minHeight: '400px' }}
     />
   );
 }

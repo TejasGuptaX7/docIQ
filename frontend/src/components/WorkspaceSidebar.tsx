@@ -1,3 +1,4 @@
+// src/components/WorkspaceSidebar.tsx
 import { useMemo } from 'react';
 import {
   Folder, BookOpen, Sparkles, FileText, Globe,
@@ -5,7 +6,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card   } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuTrigger,
@@ -27,7 +28,7 @@ interface Props {
   onMoveDoc: (docId: string, ws: string) => void;
   workspaces: string[];
   wsIcon: (w: string) => JSX.Element;
-  onNew: () => void; // opens WorkspaceSheet
+  onNew: () => void;
 }
 
 const DEFAULT_TEMPLATES = ['Research', 'Academic', 'Fun', 'Literature', 'Travel'];
@@ -43,7 +44,7 @@ export default function WorkspaceSidebar({
   wsIcon,
   onNew,
 }: Props) {
-  /* docs visible in current workspace */
+  // Get docs visible in current workspace
   const docsInWs = useMemo(
     () =>
       docs.filter(
@@ -52,37 +53,48 @@ export default function WorkspaceSidebar({
     [docs, tags, selectedWorkspace]
   );
 
-  /* helper to switch workspace from the rail or menu */
+  // Helper to switch workspace from the rail or menu
   const switchTo = (ws: string) => onMoveDoc('__switch__', ws);
 
+  // Handle document move with proper state update
+  const handleMoveDoc = async (docId: string, targetWs: string) => {
+    // Call the move function
+    await onMoveDoc(docId, targetWs);
+    
+    // If moving the currently selected doc, deselect it
+    if (docId === selectedDoc && targetWs !== selectedWorkspace) {
+      onSelectDoc('');
+    }
+  };
+
   return (
-    <aside className="w-80 flex flex-col border-r bg-card/60">
-      {/* document list */}
-      <ScrollArea className="flex-1 p-4">
+    <aside className="w-full h-full flex flex-col bg-card/60">
+      {/* Document list */}
+      <ScrollArea className="flex-1 p-3">
         {docsInWs.length ? (
           docsInWs.map((doc) => (
             <Card
               key={doc._additional.id}
               onClick={() => onSelectDoc(doc._additional.id)}
-              className={`p-3 mb-2 cursor-pointer ${
+              className={`p-2.5 mb-1.5 cursor-pointer transition-all ${
                 selectedDoc === doc._additional.id
                   ? 'bg-primary/10 border-primary'
                   : 'hover:bg-card/70'
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   {wsIcon(selectedWorkspace)}
-                  <span className="text-sm truncate w-40">
+                  <span className="text-xs truncate">
                     {doc.title || 'Untitled'}
                   </span>
                 </div>
 
-                {/* “Move to …” */}
+                {/* Move to menu */}
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="icon" variant="ghost">
-                      <EllipsisVertical className="w-4 h-4" />
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0">
+                      <EllipsisVertical className="w-3 h-3" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" side="left">
@@ -94,10 +106,11 @@ export default function WorkspaceSidebar({
                     {workspaces.map((ws) => (
                       <DropdownMenuItem
                         key={ws}
-                        onSelect={() => onMoveDoc(doc._additional.id, ws)}
+                        disabled={ws === selectedWorkspace}
+                        onSelect={() => handleMoveDoc(doc._additional.id, ws)}
                       >
                         {wsIcon(ws)}
-                        <span className="ml-2">{ws}</span>
+                        <span className="ml-2 text-xs">{ws}</span>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
@@ -106,16 +119,16 @@ export default function WorkspaceSidebar({
             </Card>
           ))
         ) : (
-          <p className="text-xs text-muted-foreground p-2">
-            No docs in “{selectedWorkspace}”
+          <p className="text-xs text-muted-foreground text-center p-4">
+            No documents in "{selectedWorkspace}"
           </p>
         )}
       </ScrollArea>
 
-      {/* bottom rail */}
+      {/* Bottom rail */}
       <div className="border-t p-2 flex items-center justify-between">
-        {/* existing workspace icons */}
-        <div className="flex gap-1">
+        {/* Existing workspace icons */}
+        <div className="flex gap-0.5 flex-wrap">
           {workspaces.map((ws) => (
             <Button
               key={ws}
@@ -123,26 +136,31 @@ export default function WorkspaceSidebar({
               variant={ws === selectedWorkspace ? 'default' : 'ghost'}
               onClick={() => switchTo(ws)}
               title={ws}
+              className="h-7 w-7"
             >
               {wsIcon(ws)}
             </Button>
           ))}
         </div>
 
-        {/* ＋ menu */}
+        {/* + menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost">
-              <Plus className="w-5 h-5" />
+            <Button size="icon" variant="ghost" className="h-7 w-7">
+              <Plus className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-44">
-            <DropdownMenuItem onSelect={onNew}>＋ New Workspace</DropdownMenuItem>
+          <DropdownMenuContent side="top" align="end" className="w-40">
+            <DropdownMenuItem onSelect={onNew} className="text-xs">
+              ＋ New Workspace
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             {DEFAULT_TEMPLATES.map((tpl) => (
               <DropdownMenuItem
                 key={tpl}
                 onSelect={() => switchTo(tpl)}
+                disabled={workspaces.includes(tpl)}
+                className="text-xs"
               >
                 {wsIcon(tpl)}
                 <span className="ml-2">{tpl}</span>

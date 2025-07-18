@@ -1,14 +1,23 @@
+// src/components/AssistantPanel.tsx
 import { useState, useRef, useEffect } from "react";
 import ChatInterface from "./ChatInterface";
+import { GlassCard } from "@/components/GlassCard";
+import { GripVertical } from "lucide-react";
 
 interface Props {
   selectedDoc: string | null;
+  panelWidth?: number;
 }
 
-export default function AssistantPanel({ selectedDoc }: Props) {
-  const [width, setWidth] = useState(360);
+export default function AssistantPanel({ selectedDoc, panelWidth = 380 }: Props) {
+  const [width, setWidth] = useState(panelWidth);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
+
+  // Update width when panelWidth prop changes
+  useEffect(() => {
+    setWidth(panelWidth);
+  }, [panelWidth]);
 
   // Handle mouse movement during drag
   useEffect(() => {
@@ -46,21 +55,25 @@ export default function AssistantPanel({ selectedDoc }: Props) {
   };
 
   return (
-    <aside 
-      className="border-l border-border/50 bg-card/60 backdrop-blur-sm flex"
+    <div 
+      className="flex-shrink-0 relative"
       style={{ width: `${width}px` }}
     >
-      {/* Draggable handle */}
+      {/* Resize handle */}
       <div
         ref={dragRef}
-        className="w-1 bg-border/50 hover:bg-border cursor-col-resize transition-colors"
+        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/20 transition-colors z-10"
         onMouseDown={handleMouseDown}
-      />
-      
-      {/* Chat content */}
-      <div className="flex-1 p-4">
-        <ChatInterface selectedDoc={selectedDoc} />
+      >
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 hover:opacity-100 transition-opacity">
+          <GripVertical className="h-4 w-4 text-primary/50" />
+        </div>
       </div>
-    </aside>
+      
+      {/* Glass Card wrapping the entire chat */}
+      <GlassCard variant="feature" className="h-full m-2 ml-0 flex flex-col overflow-hidden">
+        <ChatInterface selectedDoc={selectedDoc} />
+      </GlassCard>
+    </div>
   );
 }

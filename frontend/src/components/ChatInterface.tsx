@@ -1,6 +1,12 @@
+// src/components/ChatInterface.tsx
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import { Button, Input, Card, Badge, Switch, Label } from '@/components/ui';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Send, Brain, Globe } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
@@ -40,9 +46,14 @@ export default function ChatInterface({ selectedDoc }: Props) {
   const [typing, setTyping] = useState(false);
   const [global, setGlobal] = useState(false);
 
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (endRef.current) {
+      endRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -101,6 +112,7 @@ export default function ChatInterface({ selectedDoc }: Props) {
         sources
       }]);
 
+      // Typing animation
       [...answer].forEach((ch, i) =>
         setTimeout(() =>
           setMessages(m =>
@@ -119,7 +131,7 @@ export default function ChatInterface({ selectedDoc }: Props) {
       setMessages(m => [...m, {
         id: crypto.randomUUID(),
         type: 'ai',
-        content: '⚠️ backend error',
+        content: '⚠️ Backend error',
         timestamp: new Date()
       }]);
       setTyping(false);
@@ -128,48 +140,83 @@ export default function ChatInterface({ selectedDoc }: Props) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Always show the toggle at the top */}
-      <div className="px-4 py-2 border-b flex justify-end items-center gap-2">
-        <Globe className="w-4 h-4 opacity-60" />
-        <Switch id="scope" checked={global} onCheckedChange={setGlobal} />
-        <Label htmlFor="scope" className="cursor-pointer select-none">
-          {global ? 'All docs' : 'Current doc'}
-        </Label>
+      {/* Toggle at the top - now properly visible */}
+      <div className="px-3 py-2 border-b border-glass-border flex justify-between items-center">
+        <h3 className="text-sm font-mono font-semibold">AI Assistant</h3>
+        <div className="flex items-center gap-2">
+          <Globe className="w-3 h-3 opacity-60" />
+          <Switch 
+            id="scope" 
+            checked={global} 
+            onCheckedChange={setGlobal}
+            className="scale-75"
+          />
+          <Label htmlFor="scope" className="cursor-pointer select-none text-xs">
+            {global ? 'All docs' : 'Current doc'}
+          </Label>
+        </div>
       </div>
 
       {!selectedDoc && !global ? (
-        <div className="flex-1 flex items-center justify-center">
-          <Card className="p-8 max-w-md text-center">
-            <Brain className="w-12 h-12 mx-auto mb-4" />
-            <p>Select a document or switch to "All docs" mode above to begin.</p>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <Card className="p-6 max-w-sm text-center bg-glass/20 border-glass-border">
+            <Brain className="w-10 h-10 mx-auto mb-3 text-primary" />
+            <p className="text-sm">Select a document or switch to "All docs" mode to begin.</p>
           </Card>
         </div>
       ) : (
         <>
-          <ScrollArea className="flex-1 mb-4">
-            {messages.map(msg => (
-              <div key={msg.id} className={`px-4 py-2 ${msg.type === 'user' ? 'text-right' : ''}`}>
-                <span className={`inline-block ${msg.type === 'ai' ? 'bg-gray-800' : 'bg-gray-600'} rounded px-3 py-2`}>
-                  {msg.content}
-                </span>
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    Sources:{' '}
-                    {msg.sources.map((s, i) => (
-                      <span key={i}>
-                        Page {s.page} ({Math.round(s.confidence * 100)}%)
-                        {i < msg.sources.length - 1 && ', '}
-                      </span>
-                    ))}
+          {/* Messages area with proper scroll */}
+          <ScrollArea className="flex-1 px-3 py-2" ref={scrollAreaRef}>
+            <div className="space-y-3">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] ${msg.type === 'user' ? 'order-2' : ''}`}>
+                    <div className={`rounded-lg px-3 py-2 text-sm ${
+                      msg.type === 'ai' 
+                        ? 'bg-glass/20 border border-glass-border' 
+                        : 'bg-primary/20 border border-primary/30'
+                    }`}>
+                      {msg.content}
+                    </div>
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="text-[10px] text-muted-foreground mt-1 px-1">
+                        Sources:{' '}
+                        {msg.sources.map((s, i) => (
+                          <span key={i}>
+                            Page {s.page} ({Math.round(s.confidence * 100)}%)
+                            {i < msg.sources.length - 1 && ', '}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
-            <div ref={endRef} />
+                </div>
+              ))}
+              <div ref={endRef} />
+            </div>
             <ScrollBar orientation="vertical" />
           </ScrollArea>
-          <div className="border-t pt-3">
-            <div className="flex gap-3 px-4 pb-4 items-center">
+
+          {/* Snippets preview if any */}
+          {snips.length > 0 && (
+            <div className="px-3 py-2 border-t border-glass-border">
+              <div className="text-[10px] text-muted-foreground mb-1">
+                Selected text ({snips.length}):
+              </div>
+              <div className="max-h-20 overflow-y-auto">
+                {snips.map((snip, i) => (
+                  <div key={snip.id} className="text-[11px] text-muted-foreground truncate">
+                    {i + 1}. {snip.text.substring(0, 50)}...
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="border-t border-glass-border p-3">
+            <div className="flex gap-2 items-center">
               <Input
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -180,9 +227,16 @@ export default function ChatInterface({ selectedDoc }: Props) {
                   }
                 }}
                 placeholder={global ? "Ask about all your documents…" : "Ask about this document…"}
+                className="text-xs h-8 bg-glass/10 border-glass-border"
+                disabled={typing}
               />
-              <Button size="icon" disabled={typing || (!input.trim() && !snips.length)} onClick={send}>
-                <Send className="w-4 h-4" />
+              <Button 
+                size="icon" 
+                disabled={typing || (!input.trim() && !snips.length)} 
+                onClick={send}
+                className="h-8 w-8"
+              >
+                <Send className="w-3 h-3" />
               </Button>
             </div>
           </div>

@@ -1,3 +1,4 @@
+// src/hooks/useDocTags.ts
 import { useEffect, useState } from 'react';
 
 /** maps docId → workspace */

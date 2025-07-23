@@ -227,7 +227,7 @@ export default function ChatInterface({ selectedDoc }: Props) {
                   }
                 }}
                 placeholder={global ? "Ask about all your documents…" : "Ask about this document…"}
-                className="text-xs h-8 bg-glass/10 border-glass-border"
+                className="text-xs h-8 bg-[#1a1a1a] text-white border border-glass-border placeholder:text-gray-400"
                 disabled={typing}
               />
               <Button 

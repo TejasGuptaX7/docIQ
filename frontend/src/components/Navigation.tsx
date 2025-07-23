@@ -1,8 +1,7 @@
-// src/components/Navigation.tsx
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/GlassCard";
-import { FileText, Download } from "lucide-react";
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react';
+import { Download } from "lucide-react";
+import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/clerk-react";
 
 export function Navigation() {
   return (
@@ -10,19 +9,27 @@ export function Navigation() {
       <GlassCard variant="nav" className="px-6 py-3">
         <nav className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
+            <img src="/dociq-logo.png" alt="docIQ Logo" className="h-6 w-6" />
             <span className="font-mono font-bold text-lg">docIQ</span>
           </div>
-          
+
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm hover:text-primary transition-colors">Features</a>
-            <a href="#pricing" className="text-sm hover:text-primary transition-colors">Pricing</a>
-            <a href="#docs" className="text-sm hover:text-primary transition-colors">Docs</a>
+            <a href="#features" className="text-sm hover:text-primary transition-colors">
+              Features
+            </a>
+            <a href="#pricing" className="text-sm hover:text-primary transition-colors">
+              Pricing
+            </a>
+            <a href="#docs" className="text-sm hover:text-primary transition-colors">
+              Docs
+            </a>
             <SignedIn>
-              <a href="/dashboard" className="text-sm hover:text-primary transition-colors">Dashboard</a>
+              <a href="/dashboard" className="text-sm hover:text-primary transition-colors">
+                Dashboard
+              </a>
             </SignedIn>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <SignedOut>
               <SignInButton mode="modal">
@@ -32,7 +39,7 @@ export function Navigation() {
                 </Button>
               </SignInButton>
             </SignedOut>
-            
+
             <SignedIn>
               <UserButton />
             </SignedIn>

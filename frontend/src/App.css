@@ -1,42 +1,326 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ───────── VectorMind / DocIQ Design System ───────── */
+@layer base {
+  :root {
+    /* Dark glassmorphism design system */
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 300 77% 75%;
+    --primary-foreground: 240 10% 3.9%;
+
+    --secondary: 240 10% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 10% 10%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 300 77% 75%;
+    --accent-foreground: 240 10% 3.9%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 20% 15%;
+    --input: 240 20% 10%;
+    --ring: 300 77% 75%;
+
+    --radius: 0.75rem;
+
+    /* Glassmorphism specific variables */
+    --glass-bg: 240 10% 15%;
+    --glass-border: 240 20% 25%;
+    --glass-shadow: 0 8px 32px 0;
+    --glass-shadow-color: 0 0% 0% / 0.37;
+    
+    /* Gradient backgrounds */
+    --gradient-bg: linear-gradient(135deg, hsl(240 10% 3.9%) 0%, hsl(260 20% 8%) 50%, hsl(280 30% 12%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(240 10% 15% / 0.2) 0%, hsl(260 20% 20% / 0.15) 100%);
+    
+    /* Animation variables */
+    --typing-speed: 3s;
+    --cursor-blink: 1s;
+
+    --sidebar-background: 240 10% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 300 77% 75%;
+    --sidebar-primary-foreground: 240 10% 3.9%;
+    --sidebar-accent: 240 10% 15%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 20% 15%;
+    --sidebar-ring: 300 77% 75%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+@layer components {
+  /* Gradient backgrounds */
+  .bg-gradient-main {
+    background-image: var(--gradient-bg);
+  }
+
+  .bg-gradient-card {
+    background-image: var(--gradient-card);
+  }
+
+  /* Glass morphism effects */
+  .glass-background {
+    @apply bg-gradient-to-br from-[#0e0e10] via-[#1a1a1d] to-[#0e0e10] backdrop-blur-lg;
+  }
+
+  .glass-morphism {
+    @apply bg-white/10 backdrop-blur-md border border-white/20;
+  }
+
+  .bg-glass {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .backdrop-blur-glass {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .border-glass-border {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .shadow-glass {
+    box-shadow: var(--glass-shadow) var(--glass-shadow-color);
+  }
+
+  /* Enhanced glow effects for modern appeal */
+  .neon-glow {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(139, 92, 246, 0.2), 0 0 80px rgba(139, 92, 246, 0.1);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 30px rgba(var(--primary), 0.5);
+  }
+
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  /* Enhanced text effects */
+  .text-gradient {
+    @apply bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500 bg-clip-text text-transparent;
+  }
+
+  .animate-gradient-x {
+    animation: gradient-x 15s ease infinite;
+    background-size: 200% 200%;
+  }
+
+  /* Floating shapes */
+  .floating-shape {
+    @apply absolute opacity-20 animate-float;
+  }
+
+  /* PDF container */
+  .pdf-container canvas {
+    @apply shadow-md mb-2;
+  }
+
+  /* Animations */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s ease-out;
+  }
+
+  .animate-cursor-blink {
+    animation: cursor-blink var(--cursor-blink) infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Enhanced font styles for modern appeal */
+  .font-inter {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  .font-space {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-feature-settings: 'ss01', 'ss02';
+  }
+
+  /* Enhanced glow effects for modern appeal */
+  .neon-glow {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(139, 92, 246, 0.2), 0 0 80px rgba(139, 92, 246, 0.1);
+  }
 }
 
-@keyframes logo-spin {
+/* === Enhanced Animations === */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-15px) rotate(1deg);
+  }
+  66% {
+    transform: translateY(-5px) rotate(-1deg);
+  }
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes glow {
   from {
-    transform: rotate(0deg);
+    opacity: 0.8;
+    filter: brightness(1);
   }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    filter: brightness(1.2);
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+@keyframes cursor-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
   }
 }
 
-.card {
-  padding: 2em;
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.8);
+  }
 }
 
-.read-the-docs {
-  color: #888;
+/* === Custom scrollbar === */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-muted/50;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-primary/60 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-primary/80;
+}
+
+/* === ScrollReveal Styles === */
+.scroll-reveal {
+  margin: 20px 0;
+}
+.scroll-reveal-text {
+  font-size: clamp(1.8rem, 5vw, 4rem);
+  line-height: 1.4;
+  font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+}
+.word {
+  display: inline-block;
+}
+
+/* ─────── Enhanced Overrides for Clerk / PDF.js / Uploadcare ─────── */
+:root {
+  --clerk-primary: #7C3AED;
+}
+
+.clerk-card {
+  @apply glass-morphism backdrop-blur-lg shadow-xl;
+}
+
+/* PDF.js Express toolbar */
+#viewer .documentHeaderControls,
+#viewer .tools-header {
+  background: rgba(20, 20, 20, 0.85) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+#viewer .tools-header button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Uploadcare widget */
+.uploadcare--widget__button,
+.uploadcare--widget__button_action {
+  background-color: var(--clerk-primary) !important;
+  border-radius: 8px !important;
+}
+.uploadcare--widget__header {
+  font-family: 'Inter', sans-serif !important;
+  background: rgba(20, 20, 20, 0.9) !important;
+}
+
+/* Enhanced spinner */
+.loader {
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--clerk-primary);
+  @apply rounded-full w-6 h-6 animate-spin inline-block;
+}
+
+/* Selection styling */
+::selection {
+  background: rgba(139, 92, 246, 0.3);
+  color: white;
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--clerk-primary);
+  outline-offset: 2px;
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
 }

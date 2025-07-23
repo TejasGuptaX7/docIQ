@@ -5,7 +5,6 @@ import {
   SignedIn,
   SignedOut,
   SignInButton,
-  SignOutButton,
   UserButton
 } from '@clerk/clerk-react';
 import {
@@ -15,8 +14,9 @@ import {
   FileText,
   Search,
   Lock,
-  Moon,
-  Sun
+  Heart,
+  Star,
+  ExternalLink
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -28,22 +28,12 @@ import AnimatedText from '@/components/AnimatedText';
 import DrawnExplanation from '@/assets/DrawnExplanation.png';
 import FloatingShapes from '@/components/FloatingShapes';
 import GradientMesh from '@/components/GradientMesh';
-
+import { Link } from 'react-router-dom'; 
 import { Navigation } from '@/components/Navigation';
 import { GlassCard } from '@/components/GlassCard';
 
 export default function Index() {
-  const [isDark, setIsDark] = useState(true);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    document.documentElement.classList.add('dark');
-  }, []);
-
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle('dark');
-  };
 
   const features = [
     {
@@ -68,6 +58,13 @@ export default function Index() {
     }
   ];
 
+  const scrollToPricing = () => {
+    const pricingSection = document.getElementById('pricing');
+    if (pricingSection) {
+      pricingSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-main">
       {/* Background layers */}
@@ -87,24 +84,26 @@ export default function Index() {
         <GlassCard variant="nav" className="px-6 py-3">
           <nav className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="h-6 w-6 text-primary" />
-              <span className="font-mono font-bold text-lg">docIQ</span>
+              <img src="/dociq-logo.png" alt="docIQ Logo" className="h-10 w-10" />
+              <span className="font-space font-bold text-xl tracking-tight">docIQ</span>
             </div>
             <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm hover:text-primary transition-colors">Features</a>
-              <a href="#pricing" className="text-sm hover:text-primary transition-colors">Pricing</a>
-              <a href="#docs" className="text-sm hover:text-primary transition-colors">Docs</a>
+              <a href="#features" className="text-sm font-medium hover:text-primary transition-colors">Features</a>
+              <button 
+                onClick={scrollToPricing}
+                className="text-sm font-medium hover:text-primary transition-colors cursor-pointer"
+              >
+                Pricing
+              </button>
+              <a href="#docs" className="text-sm font-medium hover:text-primary transition-colors">Docs</a>
               <SignedIn>
-                <a href="/dashboard" className="text-sm hover:text-primary transition-colors">Dashboard</a>
+                <a href="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">Dashboard</a>
               </SignedIn>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={toggleTheme}>
-                {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </Button>
               <SignedOut>
                 <SignInButton mode="modal">
-                  <Button variant="default" size="sm" className="font-mono">
+                  <Button variant="default" size="sm" className="font-space font-medium">
                     <Upload className="h-4 w-4" />
                     Sign In
                   </Button>
@@ -112,9 +111,6 @@ export default function Index() {
               </SignedOut>
               <SignedIn>
                 <UserButton />
-                <SignOutButton>
-                  <Button variant="ghost" size="sm">Sign Out</Button>
-                </SignOutButton>
               </SignedIn>
             </div>
           </nav>
@@ -123,38 +119,41 @@ export default function Index() {
 
       {/* Hero Section */}
       <section className="min-h-screen flex items-center justify-center px-4 pt-24">
-        <div className="text-center max-w-4xl mx-auto animate-fade-in-up">
-          <h1 className="text-5xl md:text-7xl font-mono font-bold mb-4">
+        <div className="text-center max-w-5xl mx-auto animate-fade-in-up">
+          <h1 className="text-6xl md:text-8xl font-space font-extrabold mb-6 tracking-tight leading-[0.9]">
             Transform Documents into{' '}
             <AnimatedText
               words={['Intelligence', 'Conversations', 'Insights', 'Knowledge']}
-              className="text-primary inline"
+              className="text-primary inline bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500 bg-clip-text text-transparent"
             />
           </h1>
-          <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Upload any document and unlock AI-powered semantic search, intelligent Q&A, and instant insights.
+          <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed font-inter font-light mb-10">
+            Upload any document and unlock AI-powered semantic search, intelligent Q&A, and instant insights. 
+            Your personal knowledge companion that actually understands context.
           </p>
           <div className="mt-8">
             <SignedOut>
-              <SignInButton mode="modal" afterSignInUrl="/dashboard">
-                <Button variant="default" size="xl" className="min-w-[200px] font-mono">
-                  Try docIQ for Free
+              <SignInButton mode="modal" >
+                <Button 
+                  size="xl" 
+                  className="min-w-[240px] font-space font-semibold text-lg px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-105 shadow-2xl"
+                >
+                  Start Building Your Knowledge Base
                 </Button>
               </SignInButton>
             </SignedOut>
             <SignedIn>
               <Button
-                variant="default"
                 size="xl"
-                className="min-w-[200px] font-mono"
+                className="min-w-[240px] font-space font-semibold text-lg px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-105 shadow-2xl"
                 onClick={() => navigate('/dashboard')}
               >
-                Try docIQ for Free
+                Start Building Your Knowledge Base
               </Button>
             </SignedIn>
           </div>
-          <p className="text-sm text-muted-foreground mt-6">
-            PDF, DOCX, TXT supported • No signup required
+          <p className="text-sm text-muted-foreground mt-8 font-inter">
+            PDF, DOCX, TXT supported • No credit card required • Start organizing your thoughts today
           </p>
         </div>
       </section>
@@ -162,23 +161,24 @@ export default function Index() {
       {/* Features Section */}
       <section id="features" className="py-24 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-mono font-bold mb-6">
-              Why Choose <span className="text-primary">docIQ</span>?
+          <div className="text-center mb-20">
+            <h2 className="text-5xl md:text-6xl font-space font-bold mb-8 tracking-tight">
+              Why Choose <span className="text-gradient bg-gradient-to-r from-purple-400 via-pink-500 to-blue-500 bg-clip-text text-transparent">docIQ</span>?
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Transform how you interact with documents using cutting-edge AI technology.
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto font-inter font-light leading-relaxed">
+              Transform how you interact with documents using cutting-edge AI technology. 
+              Stop searching through endless files—start having conversations with your knowledge.
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, idx) => (
-              <GlassCard key={idx} variant="feature" className="p-6 h-full">
+              <GlassCard key={idx} variant="feature" className="p-8 h-full group hover:scale-105 transition-all duration-300">
                 <div className="text-center">
-                  <div className="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <feature.icon className="h-6 w-6 text-primary" />
+                  <div className="w-16 h-16 bg-gradient-to-br from-primary/30 to-purple-600/30 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
+                    <feature.icon className="h-8 w-8 text-primary" />
                   </div>
-                  <h3 className="font-mono font-semibold text-lg mb-3">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                  <h3 className="font-space font-bold text-xl mb-4 tracking-tight">{feature.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed font-inter">{feature.description}</p>
                 </div>
               </GlassCard>
             ))}
@@ -186,31 +186,89 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Explainer Section */}
-      <section className="max-w-6xl mx-auto px-6 pb-24">
-        <div className="grid grid-cols-1 md:grid-cols-2 items-center gap-12">
-          <div className="max-w-prose">
-            <h2 className="text-3xl font-semibold font-mono mb-4">Meet docIQ</h2>
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Upload any PDF, slide deck, or webpage, and docIQ transforms it into a live,
-              searchable, ask-me-anything knowledge base. No more hunting for answers — just type your question and get instant, AI-backed responses.
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="mb-16">
+            <h2 className="text-5xl md:text-6xl font-space font-bold mb-8 tracking-tight">
+              Pricing? <span className="text-gradient bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">It's Free!</span>
+            </h2>
+            <p className="text-xl text-muted-foreground font-inter font-light leading-relaxed mb-8">
+              We're not here to drain your wallet. We're building the future of document intelligence, 
+              and we want you to be part of the journey.
             </p>
           </div>
-          <div className="bg-white p-4 rounded-xl shadow-lg dark:invert">
-            <img src={DrawnExplanation} alt="docIQ flow" className="w-full" />
+          
+          <GlassCard className="p-12 max-w-2xl mx-auto group hover:scale-105 transition-all duration-300">
+            <div className="flex items-center justify-center mb-8">
+              <Heart className="h-12 w-12 text-red-500 animate-pulse" />
+            </div>
+            <h3 className="text-3xl font-space font-bold mb-6 tracking-tight">
+              Pay us with your <span className="text-gradient bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">honest feedback</span>
+            </h3>
+            <p className="text-lg text-muted-foreground mb-8 font-inter leading-relaxed">
+              All we ask is for an unhinged, brutally honest review about your experience. 
+              Tell us what's amazing, what sucks, and what would make you recommend us to your friends.
+            </p>
+            <div className="flex items-center justify-center gap-2 mb-8">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="h-6 w-6 text-yellow-400 fill-current" />
+              ))}
+            </div>
+            <a 
+              href="https://tally.so/r/nGAveo" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
+              <Button 
+                size="lg" 
+                className="font-space font-semibold bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white px-8 py-4 text-lg transition-all duration-300 transform hover:scale-105 shadow-xl"
+              >
+                Leave Your Review <ExternalLink className="w-5 h-5 ml-2" />
+              </Button>
+            </a>
+          </GlassCard>
+        </div>
+      </section>
+
+      {/* Explainer Section */}
+      <section className="max-w-6xl mx-auto px-6 pb-24">
+        <div className="grid grid-cols-1 md:grid-cols-2 items-center gap-16">
+          <div className="max-w-prose">
+            <h2 className="text-4xl font-space font-bold mb-6 tracking-tight">Meet docIQ</h2>
+            <p className="text-muted-foreground text-lg leading-relaxed font-inter mb-6">
+              Upload any PDF, slide deck, or webpage, and docIQ transforms it into a live,
+              searchable, ask-me-anything knowledge base.
+            </p>
+            <p className="text-muted-foreground text-lg leading-relaxed font-inter">
+              No more hunting for answers in endless documents. No more losing track of important insights. 
+              Just type your question and get instant, AI-backed responses from your personal knowledge vault.
+            </p>
+          </div>
+          <div className="bg-white/5 p-6 rounded-2xl shadow-2xl backdrop-blur-sm border border-white/10 hover:scale-105 transition-all duration-300">
+            <img src={DrawnExplanation} alt="docIQ flow" className="w-full rounded-lg" />
           </div>
         </div>
       </section>
 
       {/* Final CTA */}
       <section className="text-center pb-20">
+        <div className="mb-8">
+          <h3 className="text-3xl font-space font-bold mb-4 tracking-tight">
+            Ready to revolutionize how you work with documents?
+          </h3>
+          <p className="text-lg text-muted-foreground font-inter font-light">
+            Join thousands of professionals who've already transformed their workflow.
+          </p>
+        </div>
         <SignedOut>
-          <SignInButton mode="modal">
+          <SignInButton mode="modal" >
             <Button
               size="lg"
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 text-lg font-semibold"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-12 py-4 text-lg font-space font-semibold transition-all duration-300 transform hover:scale-105 shadow-2xl"
             >
-              Experience docIQ <MessageSquare className="w-5 h-5 ml-2" />
+              Experience docIQ Now <MessageSquare className="w-5 h-5 ml-2" />
             </Button>
           </SignInButton>
         </SignedOut>
@@ -218,9 +276,9 @@ export default function Index() {
           <Button
             size="lg"
             onClick={() => navigate('/dashboard')}
-            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-8 py-4 text-lg font-semibold"
+            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-12 py-4 text-lg font-space font-semibold transition-all duration-300 transform hover:scale-105 shadow-2xl"
           >
-            Experience docIQ <MessageSquare className="w-5 h-5 ml-2" />
+            Experience docIQ Now <MessageSquare className="w-5 h-5 ml-2" />
           </Button>
         </SignedIn>
       </section>

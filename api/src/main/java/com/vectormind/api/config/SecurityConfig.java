@@ -12,8 +12,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
-// SecurityConfig.java
-
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -25,9 +23,18 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints (no auth needed)
+                // Public endpoints allowed without auth
                 .requestMatchers(
                     "/api/hello",
+                    "/api/search",
+                    "/api/upload",
+                    "/api/upload/external",
+                    "/api/drive/status",
+                    "/api/drive/sync",
+                    "/api/drive/connect",
+                    "/api/drive/claim",
+                    "/api/fallback/drive/status",
+                    "/api/vector/**",
                     "/api/drive/oauth2callback",
                     "/dashboard",
                     "/",
@@ -35,10 +42,7 @@ public class SecurityConfig {
                     "/h2-console/**"
                 ).permitAll()
 
-                // Protected endpoints
-                .requestMatchers("/api/**").authenticated()
-
-                // Catch-all
+                // Everything else requires auth (future lockdown)
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

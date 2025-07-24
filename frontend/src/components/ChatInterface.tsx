@@ -87,7 +87,7 @@ export default function ChatInterface({ selectedDoc }: Props) {
 
     try {
       const token = await getToken();
-      const res = await fetch('https://api.dociq.tech/api/search', {
+      const res = await fetch('api/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -23,32 +23,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints allowed without auth
-                .requestMatchers(
-                    "/api/hello",
-                    "/api/search",
-                    "/api/upload",
-                    "/api/upload/external",
-                    "/api/drive/status",
-                    "/api/drive/sync",
-                    "/api/drive/connect",
-                    "/api/drive/claim",
-                    "/api/fallback/drive/status",
-                    "/api/vector/**",
-                    "/api/drive/oauth2callback",
-                    "/dashboard",
-                    "/",
-                    "/static/**",
-                    "/h2-console/**"
-                ).permitAll()
-
-                // Everything else requires auth (future lockdown)
-                .anyRequest().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt
-                    .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
-                )
+                .anyRequest().permitAll() // Allow all endpoints (for soft launch only)
             );
 
         return http.build();

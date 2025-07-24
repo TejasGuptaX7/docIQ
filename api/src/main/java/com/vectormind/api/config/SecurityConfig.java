@@ -23,7 +23,18 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .anyRequest().permitAll() // Allow all endpoints (for soft launch only)
+                .requestMatchers(
+                    "/", "/dashboard", "/api/hello",
+                    "/api/drive/oauth2callback",
+                    "/static/**", "/h2-console/**"
+                ).permitAll()
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().authenticated()
+            )
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
+                )
             );
 
         return http.build();
@@ -32,7 +43,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedOriginPatterns(Arrays.asList("*")); // frontend domain preferred
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

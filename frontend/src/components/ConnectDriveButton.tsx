@@ -10,10 +10,12 @@ interface Props {
   onConnected?: () => void;
 }
 
+const API_BASE = 'https://api.dociq.tech/api';
+
 export default function ConnectDriveButton({ onConnected }: Props) {
   const { getToken, isLoaded } = useAuth();
   const [connected, setConnected] = useState(false);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
 
   // 1) check if the user already has a Drive token
   const checkDriveStatus = async () => {
@@ -21,7 +23,7 @@ export default function ConnectDriveButton({ onConnected }: Props) {
     try {
       if (isLoaded) {
         const token = await getToken();
-        const res   = await fetch('/api/drive/status', {
+        const res = await fetch(`${API_BASE}/drive/status`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -30,7 +32,7 @@ export default function ConnectDriveButton({ onConnected }: Props) {
         }
       }
       // fallback to demo (if you still support it)
-      const res = await fetch('/api/fallback/drive/status');
+      const res = await fetch(`${API_BASE}/fallback/drive/status`);
       if (res.ok) {
         setConnected(await res.json());
       }
@@ -45,7 +47,7 @@ export default function ConnectDriveButton({ onConnected }: Props) {
   const claimToken = async (tempKey: string) => {
     try {
       const token = await getToken();
-      const res   = await fetch(`/api/drive/claim?tempKey=${tempKey}`, {
+      const res = await fetch(`${API_BASE}/drive/claim?tempKey=${tempKey}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -54,7 +56,7 @@ export default function ConnectDriveButton({ onConnected }: Props) {
         onConnected?.();
 
         // immediately kick off ingestion of all Drive files
-        await fetch('/api/drive/sync', {
+        await fetch(`${API_BASE}/drive/sync`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -73,9 +75,9 @@ export default function ConnectDriveButton({ onConnected }: Props) {
 
   // handle OAuth callback params drive=connected&temp=…
   useEffect(() => {
-    const url   = new URL(window.location.href);
+    const url = new URL(window.location.href);
     const drive = url.searchParams.get('drive');
-    const temp  = url.searchParams.get('temp');
+    const temp = url.searchParams.get('temp');
     if (drive === 'connected' && temp && isLoaded) {
       claimToken(temp);
       // clean up URL
@@ -98,7 +100,7 @@ export default function ConnectDriveButton({ onConnected }: Props) {
     <Button
       variant={connected ? 'secondary' : 'outline'}
       disabled={connected}
-      onClick={() => (window.location.href = '/api/drive/connect')}
+      onClick={() => (window.location.href = `${API_BASE}/drive/connect`)}
     >
       {connected ? (
         <>

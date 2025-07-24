@@ -40,7 +40,7 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
       body.append('file', file);
       body.append('workspace', ws);
 
-      const res = await fetch('/api/upload', {
+      const res = await fetch('https://api.dociq.tech/api/upload', {
         method : 'POST',
         body,
         headers: { Authorization: `Bearer ${token}` }
@@ -74,7 +74,7 @@ export default function UploadButton({ currentWorkspace, workspaces, onUploaded 
 
     widget.done(async (fileInfo: any) => {
       try {
-        const res = await fetch('/api/upload/external', {
+        const res = await fetch('https://api.dociq.tech/api/upload/external', {
           method : 'POST',
           headers: {
             'Content-Type': 'application/json',

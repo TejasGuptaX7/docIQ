@@ -1,4 +1,3 @@
-// src/components/ChatInterface.tsx
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Send, Brain, Globe } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { searchAPI } from '@/lib/api';
 
 interface Props { selectedDoc: string | null }
 
@@ -35,7 +35,7 @@ const shorten = (s?: string) =>
 
 export default function ChatInterface({ selectedDoc }: Props) {
   const { getToken } = useAuth();
-  const [messages, setMessages] = useState<Msg[]>([{
+  const [messages, setMessages] = useState<Msg[]>([{ 
     id: 'sys',
     type: 'ai',
     content: "Hello! I'm your AI assistant. Ask me about your documents.",
@@ -49,11 +49,8 @@ export default function ChatInterface({ selectedDoc }: Props) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (endRef.current) {
-      endRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (endRef.current) endRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
@@ -79,7 +76,7 @@ export default function ChatInterface({ selectedDoc }: Props) {
       id: crypto.randomUUID(),
       type: 'user',
       content: input,
-      timestamp: new Date()
+      timestamp: new Date(),
     }]);
     setInput('');
     setSnips([]);
@@ -87,21 +84,10 @@ export default function ChatInterface({ selectedDoc }: Props) {
 
     try {
       const token = await getToken();
-      const res = await fetch('api/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          query: q,
-          docId: global ? '' : selectedDoc
-        }),
-      });
-
-      const data    = await res.json();
-      const answer  = data.error ?? data.answer ?? 'No response.';
-      const sources = data.sources;
+      const { answer, sources } = await searchAPI(
+        { query: q, docId: global ? '' : selectedDoc || undefined },
+        token
+      );
 
       const aiId = crypto.randomUUID();
       setMessages(m => [...m, {
@@ -109,7 +95,7 @@ export default function ChatInterface({ selectedDoc }: Props) {
         type: 'ai',
         content: '',
         timestamp: new Date(),
-        sources
+        sources,
       }]);
 
       // Typing animation
@@ -121,7 +107,8 @@ export default function ChatInterface({ selectedDoc }: Props) {
                 ? { ...msg, content: answer.slice(0, i + 1) }
                 : msg
             )
-          ), i * 18)
+          )
+        , i * 18)
       );
 
       setTimeout(() => setTyping(false), answer.length * 18 + 100);
@@ -131,8 +118,8 @@ export default function ChatInterface({ selectedDoc }: Props) {
       setMessages(m => [...m, {
         id: crypto.randomUUID(),
         type: 'ai',
-        content: '⚠️ Backend error',
-        timestamp: new Date()
+        content: '⚠️ Something went wrong. Please try again.',
+        timestamp: new Date(),
       }]);
       setTyping(false);
     }
@@ -140,17 +127,11 @@ export default function ChatInterface({ selectedDoc }: Props) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Toggle at the top - now properly visible */}
       <div className="px-3 py-2 border-b border-glass-border flex justify-between items-center">
         <h3 className="text-sm font-mono font-semibold">AI Assistant</h3>
         <div className="flex items-center gap-2">
           <Globe className="w-3 h-3 opacity-60" />
-          <Switch 
-            id="scope" 
-            checked={global} 
-            onCheckedChange={setGlobal}
-            className="scale-75"
-          />
+          <Switch id="scope" checked={global} onCheckedChange={setGlobal} className="scale-75" />
           <Label htmlFor="scope" className="cursor-pointer select-none text-xs">
             {global ? 'All docs' : 'Current doc'}
           </Label>
@@ -166,19 +147,14 @@ export default function ChatInterface({ selectedDoc }: Props) {
         </div>
       ) : (
         <>
-          {/* Messages area with proper scroll */}
           <ScrollArea className="flex-1 px-3 py-2" ref={scrollAreaRef}>
             <div className="space-y-3">
               {messages.map(msg => (
-                <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] ${msg.type === 'user' ? 'order-2' : ''}`}>
-                    <div className={`rounded-lg px-3 py-2 text-sm ${
-                      msg.type === 'ai' 
-                        ? 'bg-glass/20 border border-glass-border' 
-                        : 'bg-primary/20 border border-primary/30'
-                    }`}>
-                      {msg.content}
-                    </div>
+                <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>\
+                  <div className={`max-w-[80%] ${msg.type === 'user' ? 'order-2' : ''}`}>\
+                    <div className={`rounded-lg px-3 py-2 text-sm ${msg.type === 'ai' ? 'bg-glass/20 border border-glass-border' : 'bg-primary/20 border border-primary/30'}`}>\
+                      {msg.content}\
+                    </div>\
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="text-[10px] text-muted-foreground mt-1 px-1">
                         Sources:{' '}
@@ -198,7 +174,6 @@ export default function ChatInterface({ selectedDoc }: Props) {
             <ScrollBar orientation="vertical" />
           </ScrollArea>
 
-          {/* Snippets preview if any */}
           {snips.length > 0 && (
             <div className="px-3 py-2 border-t border-glass-border">
               <div className="text-[10px] text-muted-foreground mb-1">
@@ -214,7 +189,6 @@ export default function ChatInterface({ selectedDoc }: Props) {
             </div>
           )}
 
-          {/* Input area */}
           <div className="border-t border-glass-border p-3">
             <div className="flex gap-2 items-center">
               <Input
@@ -230,9 +204,9 @@ export default function ChatInterface({ selectedDoc }: Props) {
                 className="text-xs h-8 bg-[#1a1a1a] text-white border border-glass-border placeholder:text-gray-400"
                 disabled={typing}
               />
-              <Button 
-                size="icon" 
-                disabled={typing || (!input.trim() && !snips.length)} 
+              <Button
+                size="icon"
+                disabled={typing || (!input.trim() && !snips.length)}
                 onClick={send}
                 className="h-8 w-8"
               >

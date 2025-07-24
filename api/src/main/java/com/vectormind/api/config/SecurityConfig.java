@@ -12,6 +12,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
+// SecurityConfig.java
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -23,11 +25,20 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Allow OAuth callback and dashboard redirects
-                .requestMatchers("/api/drive/oauth2callback", "/dashboard", "/", "/static/**", "/h2-console/**").permitAll()
-                // Temporarily allow all API endpoints to test if JWT is working
-                .requestMatchers("/api/**").permitAll()
-                // Everything else requires authentication
+                // Public endpoints (no auth needed)
+                .requestMatchers(
+                    "/api/hello",
+                    "/api/drive/oauth2callback",
+                    "/dashboard",
+                    "/",
+                    "/static/**",
+                    "/h2-console/**"
+                ).permitAll()
+
+                // Protected endpoints
+                .requestMatchers("/api/**").authenticated()
+
+                // Catch-all
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
@@ -46,7 +57,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

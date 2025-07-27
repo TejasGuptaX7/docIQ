@@ -3,7 +3,6 @@ package com.vectormind.api;
 
 import java.net.URI;
 import java.time.Instant;
-import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -52,8 +51,10 @@ public class DriveController {
         );
         repo.save(tok);
 
+        // ✅ Dynamic frontend redirect
+        String frontendRedirect = System.getenv().getOrDefault("FRONTEND_REDIRECT_URI", "http://localhost:5173");
         return ResponseEntity.status(302)
-            .location(URI.create("http://localhost:5173/dashboard?drive=connected&temp=" + tempKey))
+            .location(URI.create(frontendRedirect + "/dashboard?drive=connected&temp=" + tempKey))
             .build();
     }
 

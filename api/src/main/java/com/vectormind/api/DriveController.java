@@ -53,6 +53,8 @@ public class DriveController {
 
         // ✅ Dynamic frontend redirect
         String frontendRedirect = System.getenv().getOrDefault("FRONTEND_REDIRECT_URI", "http://localhost:5173");
+        System.out.println("✅ FRONTEND_REDIRECT_URI used: " + frontendRedirect);
+
         return ResponseEntity.status(302)
             .location(URI.create(frontendRedirect + "/dashboard?drive=connected&temp=" + tempKey))
             .build();

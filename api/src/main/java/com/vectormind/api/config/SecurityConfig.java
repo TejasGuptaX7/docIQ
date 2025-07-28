@@ -1,7 +1,5 @@
 package com.vectormind.api.config;
 
-import java.util.List;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,6 +11,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.List;
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -22,15 +22,20 @@ public class SecurityConfig {
         http
           .cors(cors -> cors.configurationSource(corsConfigurationSource()))
           .csrf(csrf -> csrf.disable())
-          .sessionManagement(sess -> 
-              sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+          .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
           .authorizeHttpRequests(auth -> auth
-              // public endpoints
+              // allow ALL OPTIONS (CORS preflight)
+              .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+              // public UI/static
               .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
-              .requestMatchers(HttpMethod.GET, "/api/drive/connect", 
-                                         "/api/drive/oauth2callback", 
-                                         "/api/drive/status").permitAll()
-              // everything under /api needs JWT
+
+              // drive flow (no JWT yet)
+              .requestMatchers(HttpMethod.GET, "/api/drive/connect").permitAll()
+              .requestMatchers(HttpMethod.GET, "/api/drive/oauth2callback").permitAll()
+              .requestMatchers(HttpMethod.GET, "/api/drive/status").permitAll()
+
+              // everything else /api/** requires a valid Clerk JWT
               .requestMatchers("/api/**").authenticated()
               .anyRequest().authenticated()
           )
@@ -39,18 +44,17 @@ public class SecurityConfig {
                   .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
               )
           );
-
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOriginPatterns(List.of("https://dociq.tech"));
+        cfg.setAllowedOrigins(List.of("https://dociq.tech"));
         cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
-        // expose redirect Location header
+        // if your front end needs to read back any headers (e.g. Location on a 302)
         cfg.setExposedHeaders(List.of("Location"));
 
         UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();

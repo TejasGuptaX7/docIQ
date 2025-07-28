@@ -16,8 +16,7 @@ public class DriveController {
     private final DriveSyncService sync;
     private final DriveTokenRepository repo;
 
-    // Fall back to your front-end if env var is missing
-    @Value("${FRONTEND_REDIRECT_URI:https://dociq.tech}")
+    @Value("${frontend.redirect.uri:https://dociq.tech}")
     private String frontendRedirectUri;
 
     public DriveController(DriveSyncService sync, DriveTokenRepository repo) {
@@ -74,9 +73,7 @@ public class DriveController {
             repo.save(userToken);
             repo.delete(tempToken);
 
-            // async sync
             new Thread(() -> sync.sync(userId)).start();
-
             return ResponseEntity.ok(true);
         }).orElse(ResponseEntity.notFound().build());
     }

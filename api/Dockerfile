@@ -1,9 +1,25 @@
-FROM eclipse-temurin:17-jdk-jammy as build
+# Use an OpenJDK base image
+FROM eclipse-temurin:17-jdk as build
+
+# Create app directory
 WORKDIR /app
-COPY . /app
+
+# Copy source files
+COPY . .
+
+# Build your Spring Boot app using Maven
 RUN ./mvnw clean package -DskipTests
 
-FROM eclipse-temurin:17-jre-jammy
+# ---------- Runtime Stage ----------
+FROM eclipse-temurin:17-jre
+
 WORKDIR /app
+
+# Copy only the built .jar from previous stage
 COPY --from=build /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
+# Expose port
+EXPOSE 8082
+
+# Run the Spring Boot application
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -4,6 +4,7 @@ package com.vectormind.api;
 import java.net.URI;
 import java.time.Instant;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -15,6 +16,9 @@ public class DriveController {
 
     private final DriveSyncService sync;
     private final DriveTokenRepository repo;
+
+    @Value("${frontend.redirect.uri}")
+    private String frontendRedirectUri;
 
     public DriveController(DriveSyncService sync, DriveTokenRepository repo) {
         this.sync = sync;
@@ -51,12 +55,10 @@ public class DriveController {
         );
         repo.save(tok);
 
-        // ✅ Dynamic frontend redirect
-        String frontendRedirect = System.getenv().getOrDefault("FRONTEND_REDIRECT_URI", "http://localhost:5173");
-        System.out.println("✅ FRONTEND_REDIRECT_URI used: " + frontendRedirect);
+        System.out.println("✅ FRONTEND_REDIRECT_URI (Spring) = " + frontendRedirectUri);
 
         return ResponseEntity.status(302)
-            .location(URI.create(frontendRedirect + "/dashboard?drive=connected&temp=" + tempKey))
+            .location(URI.create(frontendRedirectUri + "/dashboard?drive=connected&temp=" + tempKey))
             .build();
     }
 
@@ -65,7 +67,6 @@ public class DriveController {
                                               Authentication auth) {
         String userId = getUserId(auth);
         return repo.findByUserId(tempKey).map(tempToken -> {
-            // move token from tempKey to real userId
             var userToken = new DriveToken(
                 userId,
                 tempToken.getAccessToken(),
@@ -75,7 +76,6 @@ public class DriveController {
             repo.save(userToken);
             repo.delete(tempToken);
 
-            // NEW: kick off full Drive sync immediately
             new Thread(() -> sync.sync(userId)).start();
 
             return ResponseEntity.ok(true);

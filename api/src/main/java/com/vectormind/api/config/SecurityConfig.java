@@ -1,7 +1,6 @@
 package com.vectormind.api.config;
 
 import java.util.List;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,51 +18,51 @@ public class SecurityConfig {
 
   @Bean
   SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
     http
-      /* ---- CORS -------------------------------------------------------- */
-      .cors(c -> c.configurationSource(corsConfiguration()))
-      /* ---- REST  (no cookies, no sessions) ----------------------------- */
-      .csrf(csrf -> csrf.disable())
-      .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-      /* ---- AUTHORISATION ---------------------------------------------- */
-      .authorizeHttpRequests(auth -> auth
-          /* allow every CORS pre-flight without auth */
-          .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+        /* CORS first */
+        .cors(c -> c.configurationSource(cors()))
+        /* stateless REST */
+        .csrf(csrf -> csrf.disable())
+        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        /* routes -------------------------------------------------------- */
+        .authorizeHttpRequests(auth -> auth
+            /* pre-flight for every path */
+            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-          /* public pages / static */
-          .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
+            /* public assets / demo endpoints */
+            .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
 
-          /* Google-Drive flow is public until user claims the token */
-          .requestMatchers("/api/drive/**", "/api/fallback/drive/**").permitAll()
+            /* Google-Drive flow */
+            .requestMatchers("/api/drive/**", "/api/fallback/drive/**").permitAll()
 
-          /* every other API endpoint needs a Clerk JWT */
-          .requestMatchers("/api/**").authenticated()
-
-          /* any leftover route */
-          .anyRequest().authenticated()
-      )
-      /* ---- Clerk JWT validation --------------------------------------- */
-      .oauth2ResourceServer(oauth -> oauth
-          .jwt(jwt -> jwt
-              .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
-          )
-      );
+            /* everything else needs a Clerk JWT */
+            .requestMatchers("/api/**").authenticated()
+            .anyRequest().authenticated()
+        )
+        /* Clerk JWT */
+        .oauth2ResourceServer(o -> o
+            .jwt(j -> j.jwkSetUri(
+                "https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json"))
+        );
 
     return http.build();
   }
 
-  /* ---------- single, global CORS definition --------------------------- */
-  private CorsConfigurationSource corsConfiguration() {
+  /* -------- single, global CORS policy ------------------------------- */
+  private CorsConfigurationSource cors() {
     CorsConfiguration cfg = new CorsConfiguration();
-    cfg.setAllowedOrigins(List.of("https://dociq.tech", "http://localhost:3000"));
-    cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
+    cfg.setAllowedOrigins(
+        List.of("https://dociq.tech", "http://localhost:3000"));
+    cfg.setAllowedMethods(
+        List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS","HEAD"));
     cfg.setAllowedHeaders(List.of("*"));
-    cfg.setExposedHeaders(List.of("Location", "Authorization"));
+    cfg.setExposedHeaders(List.of("Location","Authorization"));
     cfg.setAllowCredentials(true);
-    cfg.setMaxAge(3600L);                 // 1 h pre-flight cache
+    cfg.setMaxAge(3600L);                       // 1 hour
 
     UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
-    src.registerCorsConfiguration("/**", cfg);   // apply to every path
+    src.registerCorsConfiguration("/**", cfg);
     return src;
   }
 }

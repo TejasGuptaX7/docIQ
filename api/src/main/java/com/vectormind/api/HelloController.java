@@ -5,9 +5,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HelloController {
-
-    @GetMapping("/hello")
-    public String hello() {
-        return "VectorMind backend is live!";
-    }
+  @GetMapping("/api/hello")
+  public String hello() { return "pong"; }
 }

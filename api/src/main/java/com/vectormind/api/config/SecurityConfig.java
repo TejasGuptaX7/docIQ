@@ -23,12 +23,20 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // public, non-API endpoints:
+                .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
+
+                // public API endpoints for Drive OAuth flow and status polling:
                 .requestMatchers(
-                    "/", "/dashboard", "/api/hello",
+                    "/api/drive/connect",
                     "/api/drive/oauth2callback",
-                    "/static/**", "/h2-console/**"
+                    "/api/drive/status"
                 ).permitAll()
+
+                // everything else under /api requires authentication:
                 .requestMatchers("/api/**").authenticated()
+
+                // and any other request is authenticated by default
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
@@ -43,7 +51,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*")); // frontend domain preferred
+        // In prod, replace "*" with your exact frontend origin: https://dociq.tech
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

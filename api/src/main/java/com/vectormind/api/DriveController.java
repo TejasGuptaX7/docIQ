@@ -17,7 +17,7 @@ public class DriveController {
     private final DriveSyncService sync;
     private final DriveTokenRepository repo;
 
-    @Value("${frontend.redirect.uri}")
+    @Value("${frontend.redirect.uri:https://dociq.tech}")
     private String frontendRedirectUri;
 
     public DriveController(DriveSyncService sync, DriveTokenRepository repo) {

@@ -1,7 +1,10 @@
 package com.vectormind.api.config;
 
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -10,8 +13,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
-
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -19,46 +20,41 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                // public, non-API endpoints:
-                .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
-
-                // public API endpoints for Drive OAuth flow and status polling:
-                .requestMatchers(
-                    "/api/drive/connect",
-                    "/api/drive/oauth2callback",
-                    "/api/drive/status"
-                ).permitAll()
-
-                // everything else under /api requires authentication:
-                .requestMatchers("/api/**").authenticated()
-
-                // and any other request is authenticated by default
-                .anyRequest().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> jwt
-                    .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
-                )
-            );
+          .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+          .csrf(csrf -> csrf.disable())
+          .sessionManagement(sess -> 
+              sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+          .authorizeHttpRequests(auth -> auth
+              // public endpoints
+              .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
+              .requestMatchers(HttpMethod.GET, "/api/drive/connect", 
+                                         "/api/drive/oauth2callback", 
+                                         "/api/drive/status").permitAll()
+              // everything under /api needs JWT
+              .requestMatchers("/api/**").authenticated()
+              .anyRequest().authenticated()
+          )
+          .oauth2ResourceServer(oauth2 -> oauth2
+              .jwt(jwt -> jwt
+                  .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
+              )
+          );
 
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        // In prod, replace "*" with your exact frontend origin: https://dociq.tech
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
+        CorsConfiguration cfg = new CorsConfiguration();
+        cfg.setAllowedOriginPatterns(List.of("https://dociq.tech"));
+        cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+        cfg.setAllowedHeaders(List.of("*"));
+        cfg.setAllowCredentials(true);
+        // expose redirect Location header
+        cfg.setExposedHeaders(List.of("Location"));
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+        UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
+        src.registerCorsConfiguration("/**", cfg);
+        return src;
     }
 }

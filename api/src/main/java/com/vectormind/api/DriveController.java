@@ -1,4 +1,3 @@
-// src/main/java/com/vectormind/api/DriveController.java
 package com.vectormind.api;
 
 import java.net.URI;
@@ -17,7 +16,8 @@ public class DriveController {
     private final DriveSyncService sync;
     private final DriveTokenRepository repo;
 
-    @Value("${frontend.redirect.uri:https://dociq.tech}")
+    // Fall back to your front-end if env var is missing
+    @Value("${FRONTEND_REDIRECT_URI:https://dociq.tech}")
     private String frontendRedirectUri;
 
     public DriveController(DriveSyncService sync, DriveTokenRepository repo) {
@@ -55,8 +55,6 @@ public class DriveController {
         );
         repo.save(tok);
 
-        System.out.println("✅ FRONTEND_REDIRECT_URI (Spring) = " + frontendRedirectUri);
-
         return ResponseEntity.status(302)
             .location(URI.create(frontendRedirectUri + "/dashboard?drive=connected&temp=" + tempKey))
             .build();
@@ -76,6 +74,7 @@ public class DriveController {
             repo.save(userToken);
             repo.delete(tempToken);
 
+            // async sync
             new Thread(() -> sync.sync(userId)).start();
 
             return ResponseEntity.ok(true);

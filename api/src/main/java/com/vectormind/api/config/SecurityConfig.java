@@ -11,6 +11,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -24,16 +25,17 @@ public class SecurityConfig {
           .csrf(csrf -> csrf.disable())
           .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
           .authorizeHttpRequests(auth -> auth
-              // allow ALL OPTIONS (CORS preflight)
+              // CRITICAL: Allow ALL OPTIONS requests first (CORS preflight)
               .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
               // public UI/static
               .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
 
-              // drive flow (no JWT yet)
+              // drive flow endpoints (no JWT required)
               .requestMatchers(HttpMethod.GET, "/api/drive/connect").permitAll()
               .requestMatchers(HttpMethod.GET, "/api/drive/oauth2callback").permitAll()
               .requestMatchers(HttpMethod.GET, "/api/drive/status").permitAll()
+              .requestMatchers(HttpMethod.GET, "/api/fallback/drive/status").permitAll()
 
               // everything else /api/** requires a valid Clerk JWT
               .requestMatchers("/api/**").authenticated()
@@ -50,12 +52,24 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("https://dociq.tech"));
-        cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
-        cfg.setAllowedHeaders(List.of("*"));
+        
+        // Allow your frontend domain
+        cfg.setAllowedOrigins(Arrays.asList("https://dociq.tech", "http://localhost:3000"));
+        
+        // Allow all common HTTP methods
+        cfg.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
+        
+        // Allow all headers (including Authorization)
+        cfg.setAllowedHeaders(Arrays.asList("*"));
+        
+        // Allow credentials (cookies, authorization headers)
         cfg.setAllowCredentials(true);
-        // if your front end needs to read back any headers (e.g. Location on a 302)
-        cfg.setExposedHeaders(List.of("Location"));
+        
+        // Expose headers that frontend might need
+        cfg.setExposedHeaders(Arrays.asList("Location", "Authorization"));
+        
+        // Set max age for preflight cache (optional, improves performance)
+        cfg.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
         src.registerCorsConfiguration("/**", cfg);

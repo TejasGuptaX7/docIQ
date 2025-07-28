@@ -16,28 +16,64 @@ export default function ConnectDriveButton({ onConnected }: Props) {
   const { getToken, isLoaded } = useAuth();
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // 1) check if the user already has a Drive token
   const checkDriveStatus = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
       if (isLoaded) {
         const token = await getToken();
-        const res = await fetch(`${API_BASE}/drive/status`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          setConnected(await res.json());
-          return;
+        if (token) {
+          const res = await fetch(`${API_BASE}/drive/status`, {
+            method: 'GET',
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
+          
+          if (res.ok) {
+            const isConnected = await res.json();
+            setConnected(isConnected);
+            return;
+          } else if (res.status === 401) {
+            // User not authenticated, try fallback
+            console.log('User not authenticated, trying fallback');
+          } else {
+            console.error('Drive status check failed:', res.status, res.statusText);
+          }
         }
       }
+      
       // fallback to demo (if you still support it)
-      const res = await fetch(`${API_BASE}/fallback/drive/status`);
-      if (res.ok) {
-        setConnected(await res.json());
+      try {
+        const res = await fetch(`${API_BASE}/fallback/drive/status`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+        
+        if (res.ok) {
+          const isConnected = await res.json();
+          setConnected(isConnected);
+        } else {
+          console.error('Fallback drive status failed:', res.status, res.statusText);
+          setError('Unable to check Drive connection status');
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback request failed:', fallbackErr);
+        setError('Service temporarily unavailable');
       }
+      
     } catch (err) {
       console.error('[ConnectDriveButton] status error', err);
+      setError('Connection error');
     } finally {
       setLoading(false);
     }
@@ -47,31 +83,56 @@ export default function ConnectDriveButton({ onConnected }: Props) {
   const claimToken = async (tempKey: string) => {
     try {
       const token = await getToken();
-      const res = await fetch(`${API_BASE}/drive/claim?tempKey=${tempKey}`, {
+      if (!token) {
+        console.error('No auth token available');
+        return;
+      }
+      
+      const res = await fetch(`${API_BASE}/drive/claim?tempKey=${encodeURIComponent(tempKey)}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
       });
+      
       if (res.ok) {
         setConnected(true);
         onConnected?.();
 
         // immediately kick off ingestion of all Drive files
-        await fetch(`${API_BASE}/drive/sync`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        try {
+          await fetch(`${API_BASE}/drive/sync`, {
+            method: 'POST',
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          });
+        } catch (syncErr) {
+          console.error('Drive sync failed:', syncErr);
+          // Don't fail the whole flow if sync fails
+        }
+      } else {
+        console.error('Token claim failed:', res.status, res.statusText);
       }
     } catch (err) {
       console.error('[ConnectDriveButton] claim error', err);
     }
   };
 
-  // initial check + poll every 30s
+  // initial check + poll every 30s (but only if not in error state)
   useEffect(() => {
     checkDriveStatus();
-    const id = setInterval(checkDriveStatus, 30_000);
+    const id = setInterval(() => {
+      if (!error) {
+        checkDriveStatus();
+      }
+    }, 30_000);
     return () => clearInterval(id);
-  }, [isLoaded]);
+  }, [isLoaded, error]);
 
   // handle OAuth callback params drive=connected&temp=…
   useEffect(() => {
@@ -87,6 +148,10 @@ export default function ConnectDriveButton({ onConnected }: Props) {
     }
   }, [isLoaded]);
 
+  const handleConnect = () => {
+    window.location.href = `${API_BASE}/drive/connect`;
+  };
+
   if (loading) {
     return (
       <Button variant="outline" disabled>
@@ -96,11 +161,20 @@ export default function ConnectDriveButton({ onConnected }: Props) {
     );
   }
 
+  if (error) {
+    return (
+      <Button variant="outline" onClick={checkDriveStatus}>
+        <Cloud className="mr-2 h-4 w-4" />
+        Retry Connection
+      </Button>
+    );
+  }
+
   return (
     <Button
       variant={connected ? 'secondary' : 'outline'}
       disabled={connected}
-      onClick={() => (window.location.href = `${API_BASE}/drive/connect`)}
+      onClick={handleConnect}
     >
       {connected ? (
         <>
@@ -110,7 +184,7 @@ export default function ConnectDriveButton({ onConnected }: Props) {
       ) : (
         <>
           <Cloud className="mr-2 h-4 w-4" />
-          Connect&nbsp;Google&nbsp;Drive
+          Connect Google Drive
         </>
       )}
     </Button>

@@ -133,6 +133,14 @@ public class SearchController {
         weaviateUrl = "http://localhost:8080";
       }
       
+      // Ensure the URL has a protocol
+      if (!weaviateUrl.startsWith("http://") && !weaviateUrl.startsWith("https://")) {
+        weaviateUrl = "https://" + weaviateUrl;
+      }
+      
+      // Remove any quotes that might have been included
+      weaviateUrl = weaviateUrl.replace("\"", "");
+      
       weav = rest.postForObject(
         weaviateUrl + "/v1/graphql",
         new HttpEntity<>(Map.of("query", gql), headers),
@@ -257,6 +265,14 @@ public class SearchController {
       if (weaviateUrl == null || weaviateUrl.isBlank()) {
         weaviateUrl = "http://localhost:8080";
       }
+      
+      // Ensure the URL has a protocol
+      if (!weaviateUrl.startsWith("http://") && !weaviateUrl.startsWith("https://")) {
+        weaviateUrl = "https://" + weaviateUrl;
+      }
+      
+      // Remove any quotes that might have been included
+      weaviateUrl = weaviateUrl.replace("\"", "");
       
       Map<?, ?> response = rest.postForObject(
           weaviateUrl + "/v1/graphql",

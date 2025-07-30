@@ -32,6 +32,7 @@ public class SecurityConfig {
 
             /* health check endpoint */
             .requestMatchers("/health").permitAll()
+            .requestMatchers("/debug/env").permitAll()
 
             /* public assets / demo endpoints */
             .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()

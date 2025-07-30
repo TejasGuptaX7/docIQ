@@ -9,8 +9,6 @@
     WORKDIR /app
     COPY --from=build /app/target/*.jar app.jar
     
-    # Railway injects PORT (e.g. 44321).  Tell Spring to bind to it on 0.0.0.0
-    ENV JAVA_OPTS="-Dserver.port=${PORT} -Dserver.address=0.0.0.0"
-    
-    ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
-    
+    # Railway provides PORT at runtime, not build time
+    # Use exec form to ensure proper signal handling
+    ENTRYPOINT ["sh", "-c", "java -Dserver.port=${PORT:-8080} -Dserver.address=0.0.0.0 -jar app.jar"]

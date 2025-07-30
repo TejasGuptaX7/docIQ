@@ -30,11 +30,17 @@ public class SecurityConfig {
             /* pre-flight for every path */
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
+            /* health check endpoint */
+            .requestMatchers("/health").permitAll()
+
             /* public assets / demo endpoints */
             .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
 
             /* Google-Drive flow */
             .requestMatchers("/api/drive/**", "/api/fallback/drive/**").permitAll()
+
+            /* Test endpoint */
+            .requestMatchers("/api/hello").permitAll()
 
             /* everything else needs a Clerk JWT */
             .requestMatchers("/api/**").authenticated()
@@ -53,7 +59,7 @@ public class SecurityConfig {
   private CorsConfigurationSource cors() {
     CorsConfiguration cfg = new CorsConfiguration();
     cfg.setAllowedOrigins(
-        List.of("https://dociq.tech", "http://localhost:3000"));
+        List.of("https://dociq.tech", "https://api.dociq.tech", "http://localhost:3000"));
     cfg.setAllowedMethods(
         List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS","HEAD"));
     cfg.setAllowedHeaders(List.of("*"));

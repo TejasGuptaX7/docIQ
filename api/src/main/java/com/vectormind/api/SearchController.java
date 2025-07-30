@@ -49,6 +49,14 @@ public class SearchController {
       return ResponseEntity.badRequest().body(Map.of("error", "missing query"));
     }
 
+    // Check if OpenAI key is available early
+    String openAiKey = getOpenAIKey();
+    if (openAiKey == null || openAiKey.isBlank()) {
+      System.err.println("[SearchController] OpenAI API key not configured - returning error");
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                           .body(Map.of("error", "Search service is currently unavailable. OpenAI API key not configured."));
+    }
+
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -254,12 +262,23 @@ public class SearchController {
     }
   }
 
-  private ResponseEntity<?> callOpenAI(String prompt, HttpHeaders headers) {
-    String key = !cfgKey.isBlank() ? cfgKey : System.getenv("OPENAI_API_KEY");
+  private String getOpenAIKey() {
+    // Try config value first, then environment variable
+    String key = cfgKey;
     if (key == null || key.isBlank()) {
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                           .body(Map.of("error","OpenAI key not configured"));
+      key = System.getenv("OPENAI_API_KEY");
     }
+    return key;
+  }
+
+  private ResponseEntity<?> callOpenAI(String prompt, HttpHeaders headers) {
+    String key = getOpenAIKey();
+    if (key == null || key.isBlank()) {
+      System.err.println("[SearchController] OpenAI API key not found in config or environment");
+      return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                           .body(Map.of("error","Search service unavailable - OpenAI key not configured"));
+    }
+    
     headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     headers.setBearerAuth(key);
@@ -287,6 +306,7 @@ public class SearchController {
       return ResponseEntity.ok(Map.of("answer",answer.trim(),"sources",List.of()));
     } catch (Exception e) {
       System.err.println("[SearchController] OpenAI call failed: " + e.getMessage());
+      e.printStackTrace();
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                            .body(Map.of("error","AI response failed: "+e.getMessage()));
     }

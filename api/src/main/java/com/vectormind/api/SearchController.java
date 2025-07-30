@@ -18,6 +18,9 @@ public class SearchController {
   @Value("${openai.api.key:}")
   private String cfgKey;
 
+  @Value("${embedding.service.url:http://localhost:5001}")
+  private String embeddingServiceUrl;
+
   public SearchController(RestTemplate rest) {
     this.rest = rest;
   }
@@ -67,7 +70,7 @@ public class SearchController {
       @SuppressWarnings("unchecked")
       List<?> embeddings = (List<?>)
         ((Map<?,?>) rest.postForObject(
-          "http://localhost:5001/embed",
+          embeddingServiceUrl + "/embed",
           new HttpEntity<>(embedReq, headers),
           Map.class
         )).get("embeddings");
@@ -125,8 +128,13 @@ public class SearchController {
 
     Map<?,?> weav;
     try {
+      String weaviateUrl = System.getenv("WEAVIATE_URL");
+      if (weaviateUrl == null || weaviateUrl.isBlank()) {
+        weaviateUrl = "http://localhost:8080";
+      }
+      
       weav = rest.postForObject(
-        "http://localhost:8080/v1/graphql",
+        weaviateUrl + "/v1/graphql",
         new HttpEntity<>(Map.of("query", gql), headers),
         Map.class
       );
@@ -245,8 +253,13 @@ public class SearchController {
     System.out.println(gql);
     
     try {
+      String weaviateUrl = System.getenv("WEAVIATE_URL");
+      if (weaviateUrl == null || weaviateUrl.isBlank()) {
+        weaviateUrl = "http://localhost:8080";
+      }
+      
       Map<?, ?> response = rest.postForObject(
-          "http://localhost:8080/v1/graphql",
+          weaviateUrl + "/v1/graphql",
           new HttpEntity<>(Map.of("query", gql), headers),
           Map.class
       );

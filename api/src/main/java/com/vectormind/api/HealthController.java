@@ -44,8 +44,5 @@ public class HealthController {
         return status;
     }
 
-    @GetMapping("/api/hello")
-    public Map<String, String> hello() {
-        return Map.of("message", "Hello from DocIQ API!");
-    }
+
 }

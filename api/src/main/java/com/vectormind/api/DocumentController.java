@@ -12,7 +12,7 @@ import com.vectormind.api.config.WeaviateConfig;
 import java.util.*;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/docs")
 public class DocumentController {
 
   private final RestTemplate rest;

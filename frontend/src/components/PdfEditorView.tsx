@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import WebViewer from '@pdftron/pdfjs-express-viewer';
+import { useAuth } from '@clerk/clerk-react';
 
 interface Doc {
   _additional: { id: string };
@@ -24,6 +24,13 @@ interface SelectionData {
   end: number;
 }
 
+// Declare WebViewer type
+declare global {
+  interface Window {
+    WebViewer: any;
+  }
+}
+
 export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Props) {
   const viewerDiv = useRef<HTMLDivElement>(null);
   const instance = useRef<any>(null);
@@ -33,6 +40,8 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const { getToken } = useAuth();
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -67,11 +76,19 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
         setIsLoading(true);
         setError(null);
 
-        const inst = await WebViewer(
+        // Get auth token for API calls
+        const token = await getToken();
+
+        const inst = await window.WebViewer(
           {
             path: '/pdfjs-express',
             licenseKey: '7VPVv7vHAjudWJUtAoEU',
-            initialDoc: docId ? `/api/${docId}.pdf` : undefined,
+            initialDoc: docId && token ? {
+              url: `https://api.dociq.tech/api/pdf/${docId}`,
+              customHeaders: {
+                'Authorization': `Bearer ${token}`
+              }
+            } : undefined,
             disabledElements: [
               'leftPanelButton',
               'selectToolButton',
@@ -249,7 +266,14 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
       
       const loadDocument = async () => {
         try {
-          await instance.current.UI.loadDocument(`/api/${docId}.pdf`);
+          const token = await getToken();
+          
+          await instance.current.UI.loadDocument({
+            url: `https://api.dociq.tech/api/pdf/${docId}`,
+            customHeaders: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
           
           // Hide the button when switching documents
           if (buttonRef.current) {
@@ -266,7 +290,7 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
       
       loadDocument();
     }
-  }, [docId, isInitialized]);
+  }, [docId, isInitialized, getToken]);
 
   // Loading state
   if (isLoading) {

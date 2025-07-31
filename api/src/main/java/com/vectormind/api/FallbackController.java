@@ -1,14 +1,21 @@
 package com.vectormind.api;
 
+import com.vectormind.api.config.WeaviateConfig;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.RestTemplate;
-
+import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -17,31 +24,48 @@ import java.util.*;
 @RequestMapping("/api/fallback")
 public class FallbackController {
 
-    private final RestTemplate restTemplate;
-
-    private static final int TOKENS_PER_CHUNK = 400;
+    private static final Logger log = LoggerFactory.getLogger(FallbackController.class);
     private static final String DEMO_USER = "demo-user";
+    private static final int TOKENS_PER_CHUNK = 400;
 
-    public FallbackController(RestTemplate restTemplate) {
+    private final RestTemplate restTemplate;
+    private final DriveTokenRepository driveTokenRepository;
+    private final WeaviateConfig weaviateConfig;
+
+    @Value("${weaviate.api-key:}")
+    private String weaviateApiKey;
+
+    @Value("${embedding.service.url}")
+    private String embeddingServiceUrl;
+
+    public FallbackController(
+        RestTemplate restTemplate,
+        DriveTokenRepository driveTokenRepository,
+        WeaviateConfig weaviateConfig
+    ) {
         this.restTemplate = restTemplate;
+        this.driveTokenRepository = driveTokenRepository;
+        this.weaviateConfig = weaviateConfig;
     }
 
     @GetMapping("/drive/status")
-    public ResponseEntity<Map<String,Boolean>> driveStatus() {
-        // your existing fallback logic…
-        return ResponseEntity.ok(Map.of("hasToken",false));
+    public ResponseEntity<Map<String, Boolean>> driveStatus() {
+        log.info("Fallback /drive/status called");
+        boolean hasToken = driveTokenRepository.findByUserId(DEMO_USER).isPresent();
+        return ResponseEntity.ok(Map.of("hasToken", hasToken));
     }
 
-    @PostMapping(value="/upload",consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> upload(
         @RequestParam("file") MultipartFile file,
-        @RequestParam(value="workspace",defaultValue="default") String workspace
+        @RequestParam(value = "workspace", defaultValue = "default") String workspace
     ) {
-        String userId = DEMO_USER;
+        String userId   = DEMO_USER;
         String filename = Objects.requireNonNull(file.getOriginalFilename());
-        String ext = Optional.ofNullable(StringUtils.getFilenameExtension(filename))
-                             .orElse("").toLowerCase();
-        String docId = UUID.randomUUID().toString();
+        String ext      = StringUtils.getFilenameExtension(filename).toLowerCase();
+        String docId    = UUID.randomUUID().toString();
+
+        log.info("Fallback upload for user={}, file={}", userId, filename);
 
         try {
             String rawText;
@@ -52,108 +76,154 @@ public class FallbackController {
             } else if ("txt".equals(ext)) {
                 rawText = new String(file.getBytes(), StandardCharsets.UTF_8);
             } else {
-                return ResponseEntity.badRequest().body("Unsupported file: " + ext);
+                return ResponseEntity
+                    .badRequest()
+                    .body(Map.of("error", "Unsupported file type: " + ext));
             }
 
             Path out = Paths.get("uploads", docId + ".pdf");
             Files.createDirectories(out.getParent());
             Files.copy(file.getInputStream(), out, StandardCopyOption.REPLACE_EXISTING);
 
-            ingestText(rawText, filename, docId, workspace, userId, "upload");
+            ingestText(rawText, filename, docId, workspace.trim(), userId, "upload");
+
+            int wordCount  = rawText.split("\\s+").length;
+            int chunkCount = chunkText(rawText, TOKENS_PER_CHUNK).size();
 
             return ResponseEntity.ok(Map.of(
                 "docId",  docId,
                 "name",   filename,
-                "words",  rawText.split("\\s+").length,
-                "chunks", chunkText(rawText,TOKENS_PER_CHUNK).size()
+                "words",  wordCount,
+                "chunks", chunkCount
             ));
         } catch (IOException e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                 .body("Fallback upload failed: " + e.getMessage());
+            log.error("Upload processing failed", e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Upload failed: " + e.getMessage()));
         }
     }
 
-    private void ingestText(String rawText,
-                            String filename,
-                            String docId,
-                            String workspace,
-                            String userId,
-                            String source) {
+    @PostMapping("/upload/external")
+    public ResponseEntity<?> saveExternal(@RequestBody Map<String, String> body) {
+        String url       = body.get("url");
+        String name      = body.getOrDefault("name", url);
+        String workspace = body.getOrDefault("workspace", "default");
+        String userId    = DEMO_USER;
+
+        if (url == null || url.isBlank()) {
+            return ResponseEntity
+                .badRequest()
+                .body(Map.of("error", "url is required"));
+        }
+
+        log.info("Fallback external upload for url={}", url);
+
         try {
-            // chunk
-            List<String> chunks = chunkText(rawText, TOKENS_PER_CHUNK);
+            byte[] bytes = HttpClient.newHttpClient()
+                .send(HttpRequest.newBuilder(URI.create(url)).GET().build(),
+                      HttpResponse.BodyHandlers.ofByteArray())
+                .body();
 
-            // OpenAI embeddings
-            String openAiKey = System.getenv("OPENAI_API_KEY");
-            HttpHeaders embH = new HttpHeaders();
-            embH.setContentType(MediaType.APPLICATION_JSON);
-            embH.setBearerAuth(openAiKey);
-            Map<String,Object> embReq = Map.of("model","text-embedding-ada-002","input",chunks);
-            @SuppressWarnings("unchecked")
-            Map<?,?> embResp = restTemplate.postForObject(
-              "https://api.openai.com/v1/embeddings",
-              new HttpEntity<>(embReq,embH),
-              Map.class
-            );
-            @SuppressWarnings("unchecked")
-            List<Map<String,Object>> data = (List<Map<String,Object>>)embResp.get("data");
-            List<List<Double>> vectors = new ArrayList<>();
-            for (var item : data) {
-                @SuppressWarnings("unchecked")
-                List<Double> v = (List<Double>) item.get("embedding");
-                vectors.add(v);
+            String docId = UUID.randomUUID().toString();
+            Path out = Paths.get("uploads", docId + ".pdf");
+            Files.createDirectories(out.getParent());
+            Files.write(out, bytes);
+
+            String rawText;
+            try (PDDocument pdf = PDDocument.load(bytes)) {
+                rawText = new PDFTextStripper().getText(pdf);
             }
 
-            // Weaviate ingest
-            String endpoint = System.getenv("WEAVIATE_URL").replaceAll("/$","") + "/v1/objects";
-            HttpHeaders jsonH = new HttpHeaders();
-            jsonH.setContentType(MediaType.APPLICATION_JSON);
-            String weavKey = System.getenv("WEAVIATE_API_KEY");
-            if (weavKey != null && !weavKey.isBlank()) {
-                jsonH.set("X-API-KEY", weavKey);
-            }
+            ingestText(rawText, name, docId, workspace.trim(), userId, "external");
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("External upload failed", e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", e.getMessage()));
+        }
+    }
 
-            // store chunks & document (same as UploadController)…
+    private void ingestText(
+        String text,
+        String filename,
+        String docId,
+        String workspace,
+        String userId,
+        String source
+    ) {
+        try {
+            // 1) chunk text
+            List<String> chunks = chunkText(text, TOKENS_PER_CHUNK);
+
+            // 2) get embeddings from your configured service
+            Map<String,Object> req = Map.of("texts", chunks);
+            HttpHeaders embedHdr = new HttpHeaders();
+            embedHdr.setContentType(MediaType.APPLICATION_JSON);
+
+            @SuppressWarnings("unchecked")
+            List<List<Double>> vectors = 
+                (List<List<Double>>) ((Map<?,?>) restTemplate
+                    .postForObject(
+                        embeddingServiceUrl + "/embed",
+                        new HttpEntity<>(req, embedHdr),
+                        Map.class
+                    ))
+                    .get("embeddings");
+
+            // 3) push chunks to Weaviate
+            HttpHeaders weavHdr = new HttpHeaders();
+            weavHdr.setContentType(MediaType.APPLICATION_JSON);
+            weavHdr.set("X-API-KEY", weaviateApiKey);
+
+            String objectsUrl = weaviateConfig.getObjectsEndpoint();
             for (int i = 0; i < chunks.size(); i++) {
                 Map<String,Object> obj = Map.of(
-                  "class","Chunk",
-                  "id",UUID.randomUUID().toString(),
-                  "properties",Map.of(
-                    "docId", docId,
-                    "text",  chunks.get(i),
-                    "page",  i+1,
-                    "userId",userId
-                  ),
-                  "vector", vectors.get(i)
+                    "class","Chunk",
+                    "id", UUID.randomUUID().toString(),
+                    "properties", Map.of(
+                        "docId",  docId,
+                        "text",   chunks.get(i),
+                        "page",   i + 1,
+                        "userId", userId
+                    ),
+                    "vector", vectors.get(i)
                 );
-                restTemplate.postForEntity(endpoint, new HttpEntity<>(obj,jsonH), String.class);
+                restTemplate.postForEntity(objectsUrl, new HttpEntity<>(obj, weavHdr), String.class);
             }
-            Map<String,Object> docObj = Map.of(
-              "class","Document",
-              "id",docId,
-              "properties",Map.of(
-                "title",   filename,
-                "pages",   chunks.size(),
-                "processed",true,
-                "workspace",workspace,
-                "userId",  userId,
-                "source",  source
-              )
-            );
-            restTemplate.postForEntity(endpoint, new HttpEntity<>(docObj,jsonH), String.class);
 
+            // 4) store document metadata
+            restTemplate.postForEntity(
+                objectsUrl,
+                new HttpEntity<>(Map.of(
+                    "class","Document",
+                    "id",    docId,
+                    "properties", Map.of(
+                        "title",     filename,
+                        "pages",     chunks.size(),
+                        "processed", true,
+                        "workspace", workspace,
+                        "userId",    userId,
+                        "source",    source
+                    )
+                ), weavHdr),
+                String.class
+            );
+
+            log.info("Ingested {} chunks for {}", chunks.size(), filename);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Ingestion failed for {}", filename, e);
         }
     }
 
-    private List<String> chunkText(String text, int max) {
-        String[] w = text.split("\\s+");
+    private List<String> chunkText(String text, int maxTokens) {
+        String[] words = text.split("\\s+");
         List<String> out = new ArrayList<>();
-        for (int i = 0; i < w.length; i += max) {
-            out.add(String.join(" ", Arrays.copyOfRange(w, i,
-                       Math.min(i + max, w.length))));
+        for (int i = 0; i < words.length; i += maxTokens) {
+            out.add(String.join(" ",
+                Arrays.copyOfRange(words, i, Math.min(i + maxTokens, words.length))
+            ));
         }
         return out;
     }

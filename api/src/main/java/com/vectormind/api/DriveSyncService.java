@@ -1,21 +1,22 @@
 package com.vectormind.api;
 
+import com.vectormind.api.config.WeaviateConfig;
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.oauth2.BearerToken;
-import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
-import com.google.api.client.googleapis.auth.oauth2.*;
+import com.google.api.client.auth.oauth2.ClientParametersAuthentication;     // <— fixed import
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.api.services.drive.model.File;
-
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-
+import com.google.api.client.http.GenericUrl;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.util.*;
@@ -23,219 +24,223 @@ import java.util.*;
 @Service
 public class DriveSyncService {
 
-  private static final String APP = "VectorMind";
-  private static final GsonFactory JSON = GsonFactory.getDefaultInstance();
-  private static final int BATCH_SIZE = 10;
+    private static final String APP = "VectorMind";
+    private static final GsonFactory JSON = GsonFactory.getDefaultInstance();
+    private static final int BATCH_SIZE = 10;
 
-  @Value("${google.redirect.uri}")
-  private String redirectUri;
+    @Value("${google.redirect.uri}")
+    private String redirectUri;
 
-  @Value("${google.client.id}")
-  private String CLIENT_ID;
+    @Value("${google.client.id}")
+    private String CLIENT_ID;
 
-  @Value("${google.client.secret}")
-  private String CLIENT_SECRET;
+    @Value("${google.client.secret}")
+    private String CLIENT_SECRET;
 
-  @Value("${upload.external.endpoint}")
-  private String UPLOAD_URL;
+    private final DriveTokenRepository repo;
+    private final RestTemplate rest;
+    private final DocumentReferenceRepository docRefRepo;
+    private final WeaviateConfig weaviateConfig;
+    private final String weaviateApiKey;
 
-  private final DriveTokenRepository repo;
-  private final RestTemplate rest;
-  private final DocumentReferenceRepository docRefRepo;
-
-  public DriveSyncService(DriveTokenRepository repo,
-                          RestTemplate rest,
-                          DocumentReferenceRepository docRefRepo) {
-    this.repo = repo;
-    this.rest = rest;
-    this.docRefRepo = docRefRepo;
-  }
-
-  /** used by DriveController **/
-  public String getRedirectUri() {
-    return redirectUri;
-  }
-
-  public GoogleAuthorizationCodeFlow flow() throws Exception {
-    return new GoogleAuthorizationCodeFlow.Builder(
-        GoogleNetHttpTransport.newTrustedTransport(),
-        JSON,
-        CLIENT_ID,
-        CLIENT_SECRET,
-        List.of(DriveScopes.DRIVE_READONLY)
-      )
-      .setAccessType("offline")
-      .build();
-  }
-
-  public Credential exchange(String code) throws Exception {
-    GoogleTokenResponse res = flow().newTokenRequest(code)
-                                    .setRedirectUri(redirectUri)
-                                    .execute();
-    return flow().createAndStoreCredential(res, null);
-  }
-
-  public void sync(String userId) {
-    repo.findByUserId(userId).ifPresentOrElse(tok -> {
-      try {
-        Drive drive = buildDriveService(tok);
-        List<File> files = drive.files().list()
-          .setFields("files(id,name,mimeType,size)")
-          .setQ("mimeType='application/pdf'")
-          .setPageSize(100)
-          .execute().getFiles();
-
-        for (int i=0;i<files.size();i+=BATCH_SIZE) {
-          List<File> batch = files.subList(i, Math.min(i+BATCH_SIZE, files.size()));
-          for (File f : batch) {
-            processFile(drive,f,userId);
-          }
-          Thread.sleep(500);
-        }
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-    }, () -> System.err.println("No token for " + userId));
-  }
-
-  private Drive buildDriveService(DriveToken tok) throws Exception {
-    Credential cred = new Credential.Builder(BearerToken.authorizationHeaderAccessMethod())
-      .setTransport(GoogleNetHttpTransport.newTrustedTransport())
-      .setJsonFactory(JSON)
-      .setTokenServerUrl(new com.google.api.client.http.GenericUrl("https://oauth2.googleapis.com/token"))
-      .setClientAuthentication(new ClientParametersAuthentication(CLIENT_ID, CLIENT_SECRET))
-      .build();
-    cred.setAccessToken(tok.getAccessToken());
-    cred.setRefreshToken(tok.getRefreshToken());
-    cred.setExpirationTimeMilliseconds(tok.getExpiryTime().toEpochMilli());
-    if (cred.getExpirationTimeMilliseconds() <= System.currentTimeMillis()) {
-      cred.refreshToken();
-      tok.setAccessToken(cred.getAccessToken());
-      tok.setExpiryTime(Instant.ofEpochMilli(cred.getExpirationTimeMilliseconds()));
-      repo.save(tok);
-    }
-    return new Drive.Builder(
-      GoogleNetHttpTransport.newTrustedTransport(), JSON, cred
-    ).setApplicationName(APP).build();
-  }
-
-  private void processFile(Drive drive, File file, String userId) throws Exception {
-    var out = new ByteArrayOutputStream();
-    drive.files().get(file.getId()).executeMediaAndDownloadTo(out);
-    byte[] data = out.toByteArray();
-    out.close();
-
-    String rawText;
-    try (var pdf = org.apache.pdfbox.pdmodel.PDDocument.load(data)) {
-      rawText = new org.apache.pdfbox.text.PDFTextStripper().getText(pdf);
+    public DriveSyncService(
+        DriveTokenRepository repo,
+        RestTemplate rest,
+        DocumentReferenceRepository docRefRepo,
+        WeaviateConfig weaviateConfig,
+        @Value("${weaviate.api-key:}") String weaviateApiKey
+    ) {
+        this.repo = repo;
+        this.rest = rest;
+        this.docRefRepo = docRefRepo;
+        this.weaviateConfig = weaviateConfig;
+        this.weaviateApiKey = weaviateApiKey;
     }
 
-    String docId = UUID.randomUUID().toString();
-    ingestText(rawText, file.getName(), docId, "default", userId, "drive");
+    public String getRedirectUri() {
+        return redirectUri;
+    }
 
-    DocumentReference ref = new DocumentReference(docId, userId, file.getName(), file.getId(), "drive");
-    ref.setFileSize(file.getSize());
-    docRefRepo.save(ref);
-  }
-
-  /**
-   * Used by DocumentCacheService
-   */
-  public byte[] downloadFileContent(String googleDriveId, String userId) {
-    return repo.findByUserId(userId).map(tok -> {
-      try {
-        var out = new ByteArrayOutputStream();
-        buildDriveService(tok).files().get(googleDriveId)
-          .executeMediaAndDownloadTo(out);
-        return out.toByteArray();
-      } catch (Exception e) {
-        e.printStackTrace();
-        return null;
-      }
-    }).orElse(null);
-  }
-
-  private void ingestText(String rawText,
-                         String filename,
-                         String docId,
-                         String workspace,
-                         String userId,
-                         String source) {
-    try {
-      List<String> chunks = chunkText(rawText,400);
-
-      // OpenAI embeddings
-      String openAiKey = System.getenv("OPENAI_API_KEY");
-      HttpHeaders embH = new HttpHeaders();
-      embH.setContentType(MediaType.APPLICATION_JSON);
-      embH.setBearerAuth(openAiKey);
-      Map<String,Object> embReq = Map.of("model","text-embedding-ada-002","input",chunks);
-      @SuppressWarnings("unchecked")
-      Map<?,?> embResp = rest.postForEntity(
-        "https://api.openai.com/v1/embeddings",
-        new HttpEntity<>(embReq,embH),
-        Map.class
-      ).getBody();
-      @SuppressWarnings("unchecked")
-      List<Map<String,Object>> data = (List<Map<String,Object>>)embResp.get("data");
-      List<List<Double>> vectors = new ArrayList<>();
-      for (var item : data) {
-        @SuppressWarnings("unchecked")
-        List<Double> v = (List<Double>) item.get("embedding");
-        vectors.add(v);
-      }
-
-      // Weaviate store
-      String weav = System.getenv("WEAVIATE_URL");
-      if (!weav.startsWith("http")) weav="https://"+weav;
-      String endpoint = weav + "/v1/objects";
-      HttpHeaders jsonH = new HttpHeaders();
-      jsonH.setContentType(MediaType.APPLICATION_JSON);
-      String weavKey = System.getenv("WEAVIATE_API_KEY");
-      if (weavKey!=null&&!weavKey.isBlank()) jsonH.set("X-API-KEY",weavKey);
-
-      for (int i=0;i<chunks.size();i++) {
-        Map<String,Object> obj = Map.of(
-          "class","Chunk",
-          "id",UUID.randomUUID().toString(),
-          "properties",Map.of(
-            "docId", docId,
-            "text",  chunks.get(i),
-            "page",  i+1,
-            "userId",userId
-          ),
-          "vector", vectors.get(i)
-        );
-        rest.postForEntity(endpoint,new HttpEntity<>(obj,jsonH),String.class);
-      }
-
-      Map<String,Object> docObj = Map.of(
-        "class","Document",
-        "id",docId,
-        "properties",Map.of(
-          "title",     filename,
-          "pages",     chunks.size(),
-          "processed", true,
-          "workspace", workspace,
-          "userId",    userId,
-          "source",    source
+    public GoogleAuthorizationCodeFlow flow() throws Exception {
+        return new GoogleAuthorizationCodeFlow.Builder(
+            GoogleNetHttpTransport.newTrustedTransport(),
+            JSON,
+            CLIENT_ID,
+            CLIENT_SECRET,
+            List.of(DriveScopes.DRIVE_READONLY)
         )
-      );
-      rest.postForEntity(endpoint,new HttpEntity<>(docObj,jsonH),String.class);
-
-    } catch (Exception e) {
-      e.printStackTrace();
+        .setAccessType("offline")
+        .build();
     }
-  }
 
-  private List<String> chunkText(String text, int max) {
-    String[] w = text.split("\\s+");
-    List<String> out = new ArrayList<>();
-    for (int i=0;i<w.length;i+=max) {
-      out.add(String.join(" ",
-        Arrays.copyOfRange(w,i,Math.min(i+max,w.length))
-      ));
+    public Credential exchange(String code) throws Exception {
+        GoogleTokenResponse res = flow()
+            .newTokenRequest(code)
+            .setRedirectUri(redirectUri)
+            .execute();
+        return flow().createAndStoreCredential(res, null);
     }
-    return out;
-  }
+
+    public void sync(String userId) {
+        repo.findByUserId(userId).ifPresent(tok -> {
+            try {
+                Drive drive = buildDriveService(tok);
+                List<File> files = drive.files().list()
+                    .setFields("files(id,name,mimeType,size)")
+                    .setQ("mimeType='application/pdf'")
+                    .setPageSize(100)
+                    .execute()
+                    .getFiles();
+
+                for (int i = 0; i < files.size(); i += BATCH_SIZE) {
+                    List<File> batch = files.subList(i, Math.min(i+BATCH_SIZE, files.size()));
+                    for (File f : batch) {
+                        processFile(drive, f, userId);
+                    }
+                    Thread.sleep(500);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void processFile(Drive drive, File file, String userId) throws Exception {
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        drive.files().get(file.getId()).executeMediaAndDownloadTo(os);
+        byte[] content = os.toByteArray();
+        String rawText;
+        try (PDDocument pdf = PDDocument.load(content)) {
+            rawText = new PDFTextStripper().getText(pdf);
+        }
+        String docId = UUID.randomUUID().toString();
+        ingestText(rawText, file.getName(), docId, "default", userId, "drive");
+        DocumentReference ref = new DocumentReference(docId, userId, file.getName(), file.getId(), "drive");
+        ref.setFileSize(file.getSize());
+        docRefRepo.save(ref);
+        os.close();
+    }
+
+    private void ingestText(
+        String rawText,
+        String filename,
+        String docId,
+        String workspace,
+        String userId,
+        String source
+    ) {
+        try {
+            List<String> chunks = chunkText(rawText, 400);
+            Map<String,Object> embedReq = Map.of("texts", chunks);
+
+            HttpHeaders embedHdr = new HttpHeaders();
+            embedHdr.setContentType(MediaType.APPLICATION_JSON);
+            @SuppressWarnings("unchecked")
+            List<List<Double>> vectors = (List<List<Double>>)rest
+                .postForObject("http://localhost:5001/embed",
+                               new HttpEntity<>(embedReq, embedHdr),
+                               Map.class)
+                .get("embeddings");
+
+            HttpHeaders weavHdr = new HttpHeaders();
+            weavHdr.setContentType(MediaType.APPLICATION_JSON);
+            weavHdr.set("X-API-KEY", weaviateApiKey);
+
+            for (int i = 0; i < chunks.size(); i++) {
+                Map<String,Object> obj = Map.of(
+                    "class","Chunk",
+                    "id", UUID.randomUUID().toString(),
+                    "properties", Map.of(
+                        "docId", docId,
+                        "text", chunks.get(i),
+                        "page", i+1,
+                        "userId", userId
+                    ),
+                    "vector", vectors.get(i)
+                );
+                rest.postForEntity(
+                    weaviateConfig.getObjectsEndpoint(),
+                    new HttpEntity<>(obj, weavHdr),
+                    String.class
+                );
+            }
+
+            rest.postForEntity(
+                weaviateConfig.getObjectsEndpoint(),
+                new HttpEntity<>(Map.of(
+                    "class","Document",
+                    "id", docId,
+                    "properties", Map.of(
+                        "title", filename,
+                        "pages", chunks.size(),
+                        "processed", true,
+                        "workspace", workspace,
+                        "userId", userId,
+                        "source", source
+                    )
+                ), weavHdr),
+                String.class
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public byte[] downloadFileContent(String googleDriveId, String userId) {
+        return repo.findByUserId(userId).map(tok -> {
+            try {
+                Drive drive = buildDriveService(tok);
+                ByteArrayOutputStream os = new ByteArrayOutputStream();
+                drive.files().get(googleDriveId).executeMediaAndDownloadTo(os);
+                return os.toByteArray();
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }).orElse(null);
+    }
+
+    private Drive buildDriveService(DriveToken tok) throws Exception {
+        Credential cred = new Credential.Builder(
+            com.google.api.client.auth.oauth2.BearerToken.authorizationHeaderAccessMethod()
+        )
+        .setTransport(GoogleNetHttpTransport.newTrustedTransport())
+        .setJsonFactory(JSON)
+        .setTokenServerUrl(new GenericUrl("https://oauth2.googleapis.com/token"))
+        .setClientAuthentication(
+            new ClientParametersAuthentication(CLIENT_ID, CLIENT_SECRET)
+        )
+        .build();
+
+        cred.setAccessToken(tok.getAccessToken());
+        cred.setRefreshToken(tok.getRefreshToken());
+        cred.setExpirationTimeMilliseconds(tok.getExpiryTime().toEpochMilli());
+
+        if (cred.getExpirationTimeMilliseconds() != null &&
+            cred.getExpirationTimeMilliseconds() <= System.currentTimeMillis()) {
+            cred.refreshToken();
+            tok.setAccessToken(cred.getAccessToken());
+            tok.setExpiryTime(Instant.ofEpochMilli(cred.getExpirationTimeMilliseconds()));
+            repo.save(tok);
+        }
+
+        return new Drive.Builder(
+            GoogleNetHttpTransport.newTrustedTransport(),
+            JSON,
+            cred
+        )
+        .setApplicationName(APP)
+        .build();
+    }
+
+    private List<String> chunkText(String text, int max) {
+        String[] w = text.split("\\s+");
+        List<String> o = new ArrayList<>();
+        for (int i = 0; i < w.length; i += max) {
+            o.add(String.join(" ",
+                Arrays.copyOfRange(w, i, Math.min(i + max, w.length))
+            ));
+        }
+        return o;
+    }
 }

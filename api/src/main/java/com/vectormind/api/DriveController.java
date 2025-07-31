@@ -35,7 +35,7 @@ public class DriveController {
     public ResponseEntity<Void> connect() throws Exception {
         String url = sync.flow()
                          .newAuthorizationUrl()
-                         .setRedirectUri(sync.getRedirectUri())
+                         .setRedirectUri(sync.getRedirectUri())   // <— now compiles
                          .build();
         return ResponseEntity.status(302)
                              .location(URI.create(url))
@@ -53,6 +53,7 @@ public class DriveController {
             Instant.ofEpochMilli(cred.getExpirationTimeMilliseconds())
         );
         repo.save(tok);
+
         return ResponseEntity.status(302)
             .location(URI.create(frontendRedirectUri + "/dashboard?drive=connected&temp=" + tempKey))
             .build();
@@ -62,25 +63,24 @@ public class DriveController {
     public ResponseEntity<Boolean> claimToken(@RequestParam("tempKey") String tempKey,
                                               Authentication auth) {
         String userId = getUserId(auth);
-        return repo.findByUserId(tempKey)
-                   .map(tempToken -> {
-                      var userToken = new DriveToken(
-                          userId,
-                          tempToken.getAccessToken(),
-                          tempToken.getRefreshToken(),
-                          tempToken.getExpiryTime()
-                      );
-                      repo.save(userToken);
-                      repo.delete(tempToken);
-                      new Thread(() -> sync.sync(userId)).start();
-                      return ResponseEntity.ok(true);
-                   })
-                   .orElse(ResponseEntity.notFound().build());
+        return repo.findByUserId(tempKey).map(tempToken -> {
+            var userToken = new DriveToken(
+                userId,
+                tempToken.getAccessToken(),
+                tempToken.getRefreshToken(),
+                tempToken.getExpiryTime()
+            );
+            repo.save(userToken);
+            repo.delete(tempToken);
+            new Thread(() -> sync.sync(userId)).start();
+            return ResponseEntity.ok(true);
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/status")
     public ResponseEntity<Boolean> status(Authentication auth) {
         String userId = getUserId(auth);
-        return ResponseEntity.ok(repo.findByUserId(userId).isPresent());
+        boolean has = repo.findByUserId(userId).isPresent();
+        return ResponseEntity.ok(has);
     }
 }

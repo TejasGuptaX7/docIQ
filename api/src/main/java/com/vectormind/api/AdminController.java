@@ -1,21 +1,32 @@
 package com.vectormind.api;
 
+import com.vectormind.api.config.WeaviateConfig;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.file.*;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
 
     private final Path uploadDir = Paths.get("uploads");
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+    private final WeaviateConfig weaviateConfig;
+    
+    @Value("${weaviate.api-key:}")
+    private String weaviateApiKey;
+
+    public AdminController(RestTemplate restTemplate, WeaviateConfig weaviateConfig) {
+        this.restTemplate = restTemplate;
+        this.weaviateConfig = weaviateConfig;
+    }
 
     @DeleteMapping("/purge")
     public ResponseEntity<String> purge() {
@@ -26,15 +37,30 @@ public class AdminController {
                      .filter(Files::isRegularFile)
                      .forEach(p -> p.toFile().delete());
 
-            /* delete objects from classes using REST API */
+            /* delete objects from Weaviate */
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            if (weaviateApiKey != null && !weaviateApiKey.isEmpty()) {
+                headers.set("Authorization", "Bearer " + weaviateApiKey);
+            }
+            
+            String weaviateUrl = weaviateConfig.getWeaviateUrl();
             
             // Delete all objects from Chunk class
-            restTemplate.delete("http://localhost:8080/v1/objects?class=Chunk");
+            restTemplate.exchange(
+                weaviateUrl + "/v1/objects?class=Chunk",
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
+                String.class
+            );
             
             // Delete all objects from Document class  
-            restTemplate.delete("http://localhost:8080/v1/objects?class=Document");
+            restTemplate.exchange(
+                weaviateUrl + "/v1/objects?class=Document",
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
+                String.class
+            );
 
             return ResponseEntity.ok("purged");
         } catch (Exception e) {

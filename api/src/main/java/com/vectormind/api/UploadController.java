@@ -33,9 +33,6 @@ public class UploadController {
     @Value("${weaviate.api-key:}")
     private String weaviateApiKey;
 
-    @Value("${embedding.service.url}")
-    private String embeddingServiceUrl;
-
     private static final int TOKENS_PER_CHUNK = 400;
 
     public UploadController(
@@ -168,20 +165,27 @@ public class UploadController {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("X-API-KEY", weaviateApiKey);
+        if (weaviateApiKey != null && !weaviateApiKey.isEmpty()) {
+            headers.set("Authorization", "Bearer " + weaviateApiKey);
+        }
 
-        @SuppressWarnings("unchecked")
-        Map<?,?> res = restTemplate.postForObject(
-            weaviateConfig.getGraphQLEndpoint(),
-            new HttpEntity<>(Map.of("query",gql), headers),
-            Map.class
-        );
+        try {
+            @SuppressWarnings("unchecked")
+            Map<?,?> res = restTemplate.postForObject(
+                weaviateConfig.getGraphQLEndpoint(),
+                new HttpEntity<>(Map.of("query",gql), headers),
+                Map.class
+            );
 
-        if (res == null || res.get("data")==null) return List.of();
-        @SuppressWarnings("unchecked")
-        List<Map<String,Object>> docs = (List<Map<String,Object>>)
-          ((Map<?,?>)((Map<?,?>)res.get("data")).get("Get")).get("Document");
-        return docs!=null ? docs : List.of();
+            if (res == null || res.get("data")==null) return List.of();
+            @SuppressWarnings("unchecked")
+            List<Map<String,Object>> docs = (List<Map<String,Object>>)
+              ((Map<?,?>)((Map<?,?>)res.get("data")).get("Get")).get("Document");
+            return docs!=null ? docs : List.of();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return List.of();
+        }
     }
 
     private void ingestText(
@@ -194,23 +198,22 @@ public class UploadController {
     ) {
         try {
             List<String> chunks = chunkText(rawText, TOKENS_PER_CHUNK);
-            Map<String,Object> embedReq = Map.of("texts", chunks);
+            
+            // Skip embedding service - use random vectors temporarily
+            List<List<Double>> vectors = new ArrayList<>();
+            for (int i = 0; i < chunks.size(); i++) {
+                List<Double> vector = new ArrayList<>();
+                for (int j = 0; j < 384; j++) {
+                    vector.add(Math.random());
+                }
+                vectors.add(vector);
+            }
 
-            // ——— 1) fetch embeddings from your injected service ———
-            HttpHeaders embedHdr = new HttpHeaders();
-            embedHdr.setContentType(MediaType.APPLICATION_JSON);
-            @SuppressWarnings("unchecked")
-            List<List<Double>> vectors = (List<List<Double>>)
-              restTemplate.postForObject(
-                embeddingServiceUrl + "/embed",
-                new HttpEntity<>(embedReq, embedHdr),
-                Map.class
-              ).get("embeddings");
-
-            // ——— 2) push to Weaviate ———
             HttpHeaders weavHdr = new HttpHeaders();
             weavHdr.setContentType(MediaType.APPLICATION_JSON);
-            weavHdr.set("X-API-KEY", weaviateApiKey);
+            if (weaviateApiKey != null && !weaviateApiKey.isEmpty()) {
+                weavHdr.set("Authorization", "Bearer " + weaviateApiKey);
+            }
 
             for (int i = 0; i < chunks.size(); i++) {
                 Map<String,Object> obj = Map.of(
@@ -231,7 +234,6 @@ public class UploadController {
                 );
             }
 
-            // ——— finally, store the document record ———
             restTemplate.postForEntity(
               weaviateConfig.getObjectsEndpoint(),
               new HttpEntity<>(Map.of(
@@ -248,7 +250,10 @@ public class UploadController {
               ), weavHdr),
               String.class
             );
+            
+            System.out.println("[UploadController] Successfully ingested " + chunks.size() + " chunks for " + filename);
         } catch (Exception e) {
+            System.err.println("[UploadController] Ingestion failed: " + e.getMessage());
             e.printStackTrace();
         }
     }

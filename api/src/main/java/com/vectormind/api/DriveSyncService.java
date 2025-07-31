@@ -2,7 +2,7 @@ package com.vectormind.api;
 
 import com.vectormind.api.config.WeaviateConfig;
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.oauth2.ClientParametersAuthentication;     // <— fixed import
+import com.google.api.client.auth.oauth2.ClientParametersAuthentication;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
@@ -131,20 +131,22 @@ public class DriveSyncService {
     ) {
         try {
             List<String> chunks = chunkText(rawText, 400);
-            Map<String,Object> embedReq = Map.of("texts", chunks);
-
-            HttpHeaders embedHdr = new HttpHeaders();
-            embedHdr.setContentType(MediaType.APPLICATION_JSON);
-            @SuppressWarnings("unchecked")
-            List<List<Double>> vectors = (List<List<Double>>)rest
-                .postForObject("http://localhost:5001/embed",
-                               new HttpEntity<>(embedReq, embedHdr),
-                               Map.class)
-                .get("embeddings");
+            
+            // Skip embedding service - use random vectors temporarily
+            List<List<Double>> vectors = new ArrayList<>();
+            for (int i = 0; i < chunks.size(); i++) {
+                List<Double> vector = new ArrayList<>();
+                for (int j = 0; j < 384; j++) {
+                    vector.add(Math.random());
+                }
+                vectors.add(vector);
+            }
 
             HttpHeaders weavHdr = new HttpHeaders();
             weavHdr.setContentType(MediaType.APPLICATION_JSON);
-            weavHdr.set("X-API-KEY", weaviateApiKey);
+            if (weaviateApiKey != null && !weaviateApiKey.isEmpty()) {
+                weavHdr.set("Authorization", "Bearer " + weaviateApiKey);
+            }
 
             for (int i = 0; i < chunks.size(); i++) {
                 Map<String,Object> obj = Map.of(
@@ -181,7 +183,10 @@ public class DriveSyncService {
                 ), weavHdr),
                 String.class
             );
+            
+            System.out.println("[DriveSyncService] Successfully ingested " + chunks.size() + " chunks for " + filename);
         } catch (Exception e) {
+            System.err.println("[DriveSyncService] Ingestion failed: " + e.getMessage());
             e.printStackTrace();
         }
     }

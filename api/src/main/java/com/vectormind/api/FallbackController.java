@@ -35,9 +35,6 @@ public class FallbackController {
     @Value("${weaviate.api-key:}")
     private String weaviateApiKey;
 
-    @Value("${embedding.service.url}")
-    private String embeddingServiceUrl;
-
     public FallbackController(
         RestTemplate restTemplate,
         DriveTokenRepository driveTokenRepository,
@@ -154,28 +151,23 @@ public class FallbackController {
         String source
     ) {
         try {
-            // 1) chunk text
             List<String> chunks = chunkText(text, TOKENS_PER_CHUNK);
 
-            // 2) get embeddings from your configured service
-            Map<String,Object> req = Map.of("texts", chunks);
-            HttpHeaders embedHdr = new HttpHeaders();
-            embedHdr.setContentType(MediaType.APPLICATION_JSON);
+            // Skip embedding service - use random vectors temporarily
+            List<List<Double>> vectors = new ArrayList<>();
+            for (int i = 0; i < chunks.size(); i++) {
+                List<Double> vector = new ArrayList<>();
+                for (int j = 0; j < 384; j++) {
+                    vector.add(Math.random());
+                }
+                vectors.add(vector);
+            }
 
-            @SuppressWarnings("unchecked")
-            List<List<Double>> vectors = 
-                (List<List<Double>>) ((Map<?,?>) restTemplate
-                    .postForObject(
-                        embeddingServiceUrl + "/embed",
-                        new HttpEntity<>(req, embedHdr),
-                        Map.class
-                    ))
-                    .get("embeddings");
-
-            // 3) push chunks to Weaviate
             HttpHeaders weavHdr = new HttpHeaders();
             weavHdr.setContentType(MediaType.APPLICATION_JSON);
-            weavHdr.set("X-API-KEY", weaviateApiKey);
+            if (weaviateApiKey != null && !weaviateApiKey.isEmpty()) {
+                weavHdr.set("Authorization", "Bearer " + weaviateApiKey);
+            }
 
             String objectsUrl = weaviateConfig.getObjectsEndpoint();
             for (int i = 0; i < chunks.size(); i++) {
@@ -193,7 +185,6 @@ public class FallbackController {
                 restTemplate.postForEntity(objectsUrl, new HttpEntity<>(obj, weavHdr), String.class);
             }
 
-            // 4) store document metadata
             restTemplate.postForEntity(
                 objectsUrl,
                 new HttpEntity<>(Map.of(

@@ -57,15 +57,19 @@ export default function Dashboard() {
   const [rightPanelWidth, setRightPanelWidth] = useState(380);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
   const [isResizingRight, setIsResizingRight] = useState(false);
-
+  const API_BASE = 'https://api.dociq.tech/api';
   const fetchDocs = async (): Promise<Doc[]> => {
     const token = await getToken();
-    const res = await fetch('/api/documents', {
-      headers: { Authorization: `Bearer ${token}` }
+    const res = await fetch(`${API_BASE}/documents`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
     });
     return res.ok ? res.json() : [];
   };
-
   const { data: docs = [], refetch } = useQuery({
     queryKey: ['documents'],
     queryFn: fetchDocs,

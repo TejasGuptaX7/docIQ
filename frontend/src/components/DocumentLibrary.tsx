@@ -17,9 +17,13 @@ interface Doc {
   processed:boolean;
   pages:number|null;
   workspace?:string;
+  
 }
-const fetchDocs = async():Promise<Doc[]> => {
-  const r = await fetch('/api/documents');
+const API_BASE = 'https://api.dociq.tech/api'; 
+const fetchDocs = async(): Promise<Doc[]> => {
+  const r = await fetch(`${API_BASE}/documents`, {
+    credentials: 'include'
+  });
   return r.ok ? r.json() : [];
 };
 

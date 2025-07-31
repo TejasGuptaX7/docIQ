@@ -6,6 +6,7 @@ RUN ./mvnw clean package -DskipTests
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
+COPY start.sh .
+RUN chmod +x start.sh
 
-# This is the key - using shell form to expand PORT variable
-CMD java -jar app.jar --server.port=${PORT:-8080}
+CMD ["./start.sh"]

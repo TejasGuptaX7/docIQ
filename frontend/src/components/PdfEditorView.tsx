@@ -1,5 +1,4 @@
-// src/components/PdfEditorView.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import WebViewer from '@pdftron/pdfjs-express-viewer';
 
 interface Doc {
@@ -13,147 +12,296 @@ interface Doc {
 interface Props { 
   docId: string | null;
   docs?: Doc[];
+  onSelectionAdd?: (selection: SelectionData) => void;
 }
 
-export default function PdfEditorView({ docId, docs = [] }: Props) {
+interface SelectionData {
+  docId: string;
+  filename: string;
+  text: string;
+  page: number;
+  start: number;
+  end: number;
+}
+
+export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Props) {
   const viewerDiv = useRef<HTMLDivElement>(null);
   const instance = useRef<any>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize WebViewer only once
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+    
+    if (buttonRef.current) {
+      buttonRef.current.remove();
+      buttonRef.current = null;
+    }
+    
+    if (instance.current) {
+      try {
+        instance.current.UI.dispose();
+      } catch (e) {
+        console.warn('Error disposing WebViewer:', e);
+      }
+      instance.current = null;
+    }
+    
+    setIsInitialized(false);
+  }, []);
+
+  // Initialize WebViewer
   useEffect(() => {
     if (!viewerDiv.current || isInitialized) return;
 
-    WebViewer(
-      {
-        path: '/pdfjs-express',
-        licenseKey: '7VPVv7vHAjudWJUtAoEU',
-        initialDoc: docId ? `/api/${docId}.pdf` : undefined,
-      },
-      viewerDiv.current
-    ).then((inst: any) => {
-      instance.current = inst;
-      setIsInitialized(true);
-      
-      // Apply dark theme
-      inst.UI.setTheme('dark');
-      
-      // Set up the floating button for text selection
-      const { documentViewer } = inst.Core;
-      const iframeDoc = inst.UI.iframeWindow.document;
-      
-      // Create floating button
-      const btn = iframeDoc.createElement('button');
-      btn.textContent = '➕ Add to chat';
-      btn.style.cssText = `
-        position: absolute;
-        padding: 4px 8px;
-        font-size: 11px;
-        background: #7C3AED;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        display: none;
-        z-index: 10000;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-      `;
-      iframeDoc.body.appendChild(btn);
-      buttonRef.current = btn;
+    const initializeViewer = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      // Handle text selection
-      const handleMouseUp = () => {
-        setTimeout(() => {
+        const inst = await WebViewer(
+          {
+            path: '/pdfjs-express',
+            licenseKey: '7VPVv7vHAjudWJUtAoEU',
+            initialDoc: docId ? `/api/${docId}.pdf` : undefined,
+            disabledElements: [
+              'leftPanelButton',
+              'selectToolButton',
+              'stickyToolButton',
+              'calloutToolButton',
+            ],
+          },
+          viewerDiv.current
+        );
+
+        instance.current = inst;
+        
+        // Apply dark theme
+        inst.UI.setTheme('dark');
+        
+        // Set up text selection functionality
+        const { documentViewer } = inst.Core;
+        const iframeDoc = inst.UI.iframeWindow.document;
+        
+        // Create floating button with improved styling
+        const btn = iframeDoc.createElement('button');
+        btn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Add to chat
+        `;
+        btn.style.cssText = `
+          position: absolute;
+          padding: 6px 12px;
+          font-size: 12px;
+          font-weight: 500;
+          background: #7C3AED;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          display: none;
+          z-index: 10000;
+          box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+          transition: all 0.2s ease;
+          font-family: system-ui, -apple-system, sans-serif;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+        `;
+        
+        // Add hover effects
+        btn.addEventListener('mouseenter', () => {
+          btn.style.background = '#6D28D9';
+          btn.style.transform = 'translateY(-1px)';
+        });
+        
+        btn.addEventListener('mouseleave', () => {
+          btn.style.background = '#7C3AED';
+          btn.style.transform = 'translateY(0)';
+        });
+        
+        iframeDoc.body.appendChild(btn);
+        buttonRef.current = btn;
+
+        // Debounced selection handler
+        let selectionTimeout: NodeJS.Timeout;
+        const handleSelection = () => {
+          clearTimeout(selectionTimeout);
+          selectionTimeout = setTimeout(() => {
+            const selection = inst.UI.iframeWindow.getSelection();
+            if (!selection || !selection.toString().trim()) {
+              btn.style.display = 'none';
+              return;
+            }
+
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const iframeRect = inst.UI.iframeWindow.frameElement.getBoundingClientRect();
+            
+            // Smart positioning to keep button in viewport
+            const buttonWidth = 120;
+            const margin = 10;
+            
+            let left = Math.max(margin, Math.min(
+              rect.left + (rect.width - buttonWidth) / 2,
+              iframeRect.width - buttonWidth - margin
+            ));
+            
+            let top = rect.bottom + 8;
+            if (top + 40 > iframeRect.height) {
+              top = rect.top - 40;
+            }
+            
+            btn.style.left = `${left}px`;
+            btn.style.top = `${top}px`;
+            btn.style.display = 'flex';
+          }, 100);
+        };
+
+        // Enhanced button click handler
+        const handleButtonClick = () => {
           const selection = inst.UI.iframeWindow.getSelection();
-          if (!selection || !selection.toString().trim()) {
-            btn.style.display = 'none';
-            return;
-          }
+          const text = selection?.toString().trim();
+          if (!text || !docId) return;
 
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          
-          // Calculate position to keep button in viewport
-          const iframeRect = inst.UI.iframeWindow.frameElement.getBoundingClientRect();
-          let left = rect.left;
-          let top = rect.bottom + 6;
-          
-          // Adjust if button would go off-screen
-          if (left + 100 > iframeRect.width) {
-            left = iframeRect.width - 110;
-          }
-          if (left < 10) {
-            left = 10;
-          }
-          
-          btn.style.left = `${left}px`;
-          btn.style.top = `${top}px`;
-          btn.style.display = 'block';
-        }, 10);
-      };
+          const currentPage = documentViewer.getCurrentPage();
+          const doc = docs.find(d => d._additional.id === docId);
+          const filename = doc?.title || 'Document';
 
-      // Button click handler
-      btn.addEventListener('click', () => {
-        const selection = inst.UI.iframeWindow.getSelection();
-        const text = selection?.toString().trim();
-        if (!text || !docId) return;
-
-        const currentPage = documentViewer.getCurrentPage();
-        const doc = docs.find(d => d._additional.id === docId);
-        const filename = doc?.title || 'Document';
-
-        window.dispatchEvent(new CustomEvent('add-selection-to-chat', {
-          detail: {
+          const selectionData: SelectionData = {
             docId,
             filename,
             text,
             page: currentPage,
             start: 0,
             end: text.length
+          };
+
+          // Use callback if provided, otherwise use custom event
+          if (onSelectionAdd) {
+            onSelectionAdd(selectionData);
+          } else {
+            window.dispatchEvent(new CustomEvent('add-selection-to-chat', {
+              detail: selectionData
+            }));
           }
-        }));
 
-        btn.style.display = 'none';
-        selection?.removeAllRanges();
-      });
-
-      iframeDoc.addEventListener('mouseup', handleMouseUp);
-      iframeDoc.addEventListener('touchend', handleMouseUp);
-      
-      // Hide button on scroll
-      inst.UI.iframeWindow.addEventListener('scroll', () => {
-        if (btn.style.display === 'block') {
           btn.style.display = 'none';
-        }
-      });
-    });
+          selection?.removeAllRanges();
+        };
 
-    // Cleanup function
-    return () => {
-      if (instance.current) {
-        instance.current.UI.dispose();
-        instance.current = null;
-        setIsInitialized(false);
+        btn.addEventListener('click', handleButtonClick);
+
+        // Event listeners
+        const events = [
+          { target: iframeDoc, event: 'mouseup', handler: handleSelection },
+          { target: iframeDoc, event: 'touchend', handler: handleSelection },
+          { target: inst.UI.iframeWindow, event: 'scroll', handler: () => btn.style.display = 'none' },
+          { target: iframeDoc, event: 'click', handler: (e: Event) => {
+            if (e.target !== btn) btn.style.display = 'none';
+          }}
+        ];
+
+        events.forEach(({ target, event, handler }) => {
+          target.addEventListener(event, handler);
+        });
+
+        // Store cleanup function
+        cleanupRef.current = () => {
+          clearTimeout(selectionTimeout);
+          events.forEach(({ target, event, handler }) => {
+            target.removeEventListener(event, handler);
+          });
+        };
+
+        setIsInitialized(true);
+        setIsLoading(false);
+
+      } catch (err) {
+        console.error('Error initializing WebViewer:', err);
+        setError('Failed to load PDF viewer. Please try refreshing the page.');
+        setIsLoading(false);
       }
     };
+
+    initializeViewer();
+
+    return cleanup;
   }, []); // Only run once on mount
 
   // Handle document changes
   useEffect(() => {
     if (instance.current && docId && isInitialized) {
-      instance.current.UI.loadDocument(`/api/${docId}.pdf`);
-      // Hide the button when switching documents
-      if (buttonRef.current) {
-        buttonRef.current.style.display = 'none';
-      }
+      setIsLoading(true);
+      setError(null);
+      
+      const loadDocument = async () => {
+        try {
+          await instance.current.UI.loadDocument(`/api/${docId}.pdf`);
+          
+          // Hide the button when switching documents
+          if (buttonRef.current) {
+            buttonRef.current.style.display = 'none';
+          }
+          
+          setIsLoading(false);
+        } catch (err) {
+          console.error('Error loading document:', err);
+          setError('Failed to load document. Please check if the file exists.');
+          setIsLoading(false);
+        }
+      };
+      
+      loadDocument();
     }
   }, [docId, isInitialized]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground">Loading PDF viewer...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg">
+        <div className="text-center space-y-4 p-6">
+          <div className="text-red-500 text-2xl">⚠️</div>
+          <p className="text-red-600 dark:text-red-400 font-medium">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
       ref={viewerDiv} 
-      className="w-full h-full rounded-lg overflow-hidden"
+      className="w-full h-full rounded-lg overflow-hidden border border-border"
       style={{ minHeight: '400px' }}
     />
   );

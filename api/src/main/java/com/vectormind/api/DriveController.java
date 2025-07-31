@@ -59,7 +59,7 @@ public class DriveController {
     }
 
     @PostMapping("/claim")
-    public ResponseEntity<Boolean> claimToken(@RequestParam("temp") String tempKey,
+    public ResponseEntity<Boolean> claimToken(@RequestParam("tempKey") String tempKey,
                                               Authentication auth) {
         String userId = getUserId(auth);
         return repo.findByUserId(tempKey)

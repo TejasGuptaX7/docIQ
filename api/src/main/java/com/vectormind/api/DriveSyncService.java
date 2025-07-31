@@ -51,7 +51,7 @@ public class DriveSyncService {
     this.docRefRepo = docRefRepo;
   }
 
-  /** Exposed for DriveController **/
+  /** used by DriveController **/
   public String getRedirectUri() {
     return redirectUri;
   }
@@ -85,18 +85,17 @@ public class DriveSyncService {
           .setPageSize(100)
           .execute().getFiles();
 
-        for (int i = 0; i < files.size(); i += BATCH_SIZE) {
+        for (int i=0;i<files.size();i+=BATCH_SIZE) {
           List<File> batch = files.subList(i, Math.min(i+BATCH_SIZE, files.size()));
           for (File f : batch) {
-            try { processFile(drive, f, userId); }
-            catch (Exception ex) { ex.printStackTrace(); }
+            processFile(drive,f,userId);
           }
           Thread.sleep(500);
         }
       } catch (Exception e) {
         e.printStackTrace();
       }
-    }, () -> System.err.println("[DriveSyncService] No token for user: " + userId));
+    }, () -> System.err.println("No token for " + userId));
   }
 
   private Drive buildDriveService(DriveToken tok) throws Exception {
@@ -115,13 +114,13 @@ public class DriveSyncService {
       tok.setExpiryTime(Instant.ofEpochMilli(cred.getExpirationTimeMilliseconds()));
       repo.save(tok);
     }
-    return new Drive.Builder(GoogleNetHttpTransport.newTrustedTransport(), JSON, cred)
-      .setApplicationName(APP)
-      .build();
+    return new Drive.Builder(
+      GoogleNetHttpTransport.newTrustedTransport(), JSON, cred
+    ).setApplicationName(APP).build();
   }
 
   private void processFile(Drive drive, File file, String userId) throws Exception {
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    var out = new ByteArrayOutputStream();
     drive.files().get(file.getId()).executeMediaAndDownloadTo(out);
     byte[] data = out.toByteArray();
     out.close();
@@ -140,17 +139,17 @@ public class DriveSyncService {
   }
 
   /**
-   * Used by DocumentCacheService to fetch raw bytes from Drive on cache miss
+   * Used by DocumentCacheService
    */
   public byte[] downloadFileContent(String googleDriveId, String userId) {
     return repo.findByUserId(userId).map(tok -> {
       try {
-        Drive drive = buildDriveService(tok);
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        drive.files().get(googleDriveId).executeMediaAndDownloadTo(outputStream);
-        return outputStream.toByteArray();
+        var out = new ByteArrayOutputStream();
+        buildDriveService(tok).files().get(googleDriveId)
+          .executeMediaAndDownloadTo(out);
+        return out.toByteArray();
       } catch (Exception e) {
-        System.err.println("[DriveSyncService] Failed to download file: " + e.getMessage());
+        e.printStackTrace();
         return null;
       }
     }).orElse(null);
@@ -163,20 +162,22 @@ public class DriveSyncService {
                          String userId,
                          String source) {
     try {
-      List<String> chunks = chunkText(rawText, 400);
+      List<String> chunks = chunkText(rawText,400);
 
       // OpenAI embeddings
-      String key = System.getenv("OPENAI_API_KEY");
-      HttpHeaders h = new HttpHeaders();
-      h.setContentType(MediaType.APPLICATION_JSON);
-      h.setBearerAuth(key);
-      Map<String,Object> req = Map.of("model","text-embedding-ada-002","input",chunks);
+      String openAiKey = System.getenv("OPENAI_API_KEY");
+      HttpHeaders embH = new HttpHeaders();
+      embH.setContentType(MediaType.APPLICATION_JSON);
+      embH.setBearerAuth(openAiKey);
+      Map<String,Object> embReq = Map.of("model","text-embedding-ada-002","input",chunks);
       @SuppressWarnings("unchecked")
-      Map<?,?> emb = rest.postForEntity("https://api.openai.com/v1/embeddings",
-                                        new HttpEntity<>(req, h),
-                                        Map.class).getBody();
+      Map<?,?> embResp = rest.postForEntity(
+        "https://api.openai.com/v1/embeddings",
+        new HttpEntity<>(embReq,embH),
+        Map.class
+      ).getBody();
       @SuppressWarnings("unchecked")
-      List<Map<String,Object>> data = (List<Map<String,Object>>) emb.get("data");
+      List<Map<String,Object>> data = (List<Map<String,Object>>)embResp.get("data");
       List<List<Double>> vectors = new ArrayList<>();
       for (var item : data) {
         @SuppressWarnings("unchecked")
@@ -186,12 +187,14 @@ public class DriveSyncService {
 
       // Weaviate store
       String weav = System.getenv("WEAVIATE_URL");
-      if (!weav.startsWith("http")) weav = "https://" + weav;
+      if (!weav.startsWith("http")) weav="https://"+weav;
       String endpoint = weav + "/v1/objects";
       HttpHeaders jsonH = new HttpHeaders();
       jsonH.setContentType(MediaType.APPLICATION_JSON);
+      String weavKey = System.getenv("WEAVIATE_API_KEY");
+      if (weavKey!=null&&!weavKey.isBlank()) jsonH.set("X-API-KEY",weavKey);
 
-      for (int i = 0; i < chunks.size(); i++) {
+      for (int i=0;i<chunks.size();i++) {
         Map<String,Object> obj = Map.of(
           "class","Chunk",
           "id",UUID.randomUUID().toString(),
@@ -203,8 +206,9 @@ public class DriveSyncService {
           ),
           "vector", vectors.get(i)
         );
-        rest.postForEntity(endpoint, new HttpEntity<>(obj, jsonH), String.class);
+        rest.postForEntity(endpoint,new HttpEntity<>(obj,jsonH),String.class);
       }
+
       Map<String,Object> docObj = Map.of(
         "class","Document",
         "id",docId,
@@ -217,7 +221,7 @@ public class DriveSyncService {
           "source",    source
         )
       );
-      rest.postForEntity(endpoint, new HttpEntity<>(docObj, jsonH), String.class);
+      rest.postForEntity(endpoint,new HttpEntity<>(docObj,jsonH),String.class);
 
     } catch (Exception e) {
       e.printStackTrace();
@@ -226,10 +230,12 @@ public class DriveSyncService {
 
   private List<String> chunkText(String text, int max) {
     String[] w = text.split("\\s+");
-    List<String> chunks = new ArrayList<>();
-    for (int i = 0; i < w.length; i += max) {
-      chunks.add(String.join(" ", Arrays.copyOfRange(w, i, Math.min(i+max, w.length))));
+    List<String> out = new ArrayList<>();
+    for (int i=0;i<w.length;i+=max) {
+      out.add(String.join(" ",
+        Arrays.copyOfRange(w,i,Math.min(i+max,w.length))
+      ));
     }
-    return chunks;
+    return out;
   }
 }

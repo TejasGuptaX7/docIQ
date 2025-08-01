@@ -24,12 +24,8 @@ interface SelectionData {
   end: number;
 }
 
-// Declare WebViewer type
-declare global {
-  interface Window {
-    WebViewer: any;
-  }
-}
+// Import WebViewer from PDFjs Express
+declare const WebViewer: any;
 
 export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Props) {
   const viewerDiv = useRef<HTMLDivElement>(null);
@@ -76,19 +72,21 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
         setIsLoading(true);
         setError(null);
 
-        // Get auth token for API calls
-        const token = await getToken();
+        // Import the WebViewer script if not already loaded
+        if (typeof WebViewer === 'undefined') {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = '/pdfjs-express/webviewer.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
 
-        const inst = await window.WebViewer(
+        const inst = await WebViewer(
           {
             path: '/pdfjs-express',
             licenseKey: '7VPVv7vHAjudWJUtAoEU',
-            initialDoc: docId && token ? {
-              url: `https://api.dociq.tech/api/pdf/${docId}`,
-              customHeaders: {
-                'Authorization': `Bearer ${token}`
-              }
-            } : undefined,
             disabledElements: [
               'leftPanelButton',
               'selectToolButton',
@@ -246,6 +244,11 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
         setIsInitialized(true);
         setIsLoading(false);
 
+        // Load initial document if provided
+        if (docId) {
+          await loadDocument(docId);
+        }
+
       } catch (err) {
         console.error('Error initializing WebViewer:', err);
         setError('Failed to load PDF viewer. Please try refreshing the page.');
@@ -258,42 +261,44 @@ export default function PdfEditorView({ docId, docs = [], onSelectionAdd }: Prop
     return cleanup;
   }, []); // Only run once on mount
 
+  // Load document function
+  const loadDocument = async (documentId: string) => {
+    if (!instance.current) return;
+    
+    try {
+      setIsLoading(true);
+      const token = await getToken();
+      
+      // Load document using the API endpoint
+      await instance.current.UI.loadDocument(`/api/pdf/${documentId}`, {
+        customHeaders: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Hide the button when switching documents
+      if (buttonRef.current) {
+        buttonRef.current.style.display = 'none';
+      }
+      
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error loading document:', err);
+      setError('Failed to load document. Please check if the file exists.');
+      setIsLoading(false);
+    }
+  };
+
   // Handle document changes
   useEffect(() => {
-    if (instance.current && docId && isInitialized) {
-      setIsLoading(true);
-      setError(null);
-      
-      const loadDocument = async () => {
-        try {
-          const token = await getToken();
-          
-          await instance.current.UI.loadDocument({
-            url: `https://api.dociq.tech/api/pdf/${docId}`,
-            customHeaders: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          // Hide the button when switching documents
-          if (buttonRef.current) {
-            buttonRef.current.style.display = 'none';
-          }
-          
-          setIsLoading(false);
-        } catch (err) {
-          console.error('Error loading document:', err);
-          setError('Failed to load document. Please check if the file exists.');
-          setIsLoading(false);
-        }
-      };
-      
-      loadDocument();
+    if (instance.current && docId && isInitialized && docId !== instance.current.lastDocId) {
+      instance.current.lastDocId = docId;
+      loadDocument(docId);
     }
-  }, [docId, isInitialized, getToken]);
+  }, [docId, isInitialized]);
 
   // Loading state
-  if (isLoading) {
+  if (isLoading && !isInitialized) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-lg">
         <div className="text-center space-y-4">

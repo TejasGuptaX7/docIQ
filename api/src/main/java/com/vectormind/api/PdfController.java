@@ -34,6 +34,8 @@ public class PdfController {
     }
 
     @GetMapping("/{docId}")
+    @CrossOrigin(origins = {"https://dociq.tech", "http://localhost:5173", "http://localhost:3000"}, 
+                 allowCredentials = "true")
     public ResponseEntity<Resource> getPdf(
             @PathVariable String docId,
             Authentication auth) {

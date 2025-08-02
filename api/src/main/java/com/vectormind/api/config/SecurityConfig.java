@@ -47,6 +47,7 @@ public class SecurityConfig {
 
             /* everything else needs a Clerk JWT */
             .requestMatchers("/api/**").authenticated()
+            .requestMatchers("/api/pdf/**").authenticated()
             .anyRequest().authenticated()
         )
         /* Clerk JWT */

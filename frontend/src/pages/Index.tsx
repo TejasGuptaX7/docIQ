@@ -259,7 +259,6 @@ export default function Index() {
             Ready to revolutionize how you work with documents?
           </h3>
           <p className="text-lg text-muted-foreground font-inter font-light">
-            Join thousands of professionals who've already transformed their workflow.
           </p>
         </div>
         <SignedOut>

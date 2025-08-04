@@ -1,5 +1,6 @@
 package com.vectormind.api.config;
 
+import java.util.Arrays;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,63 +17,102 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig {
 
-  @Bean
-  SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
-    http
-        /* CORS first */
-        .cors(c -> c.configurationSource(cors()))
-        /* stateless REST */
-        .csrf(csrf -> csrf.disable())
-        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        /* routes -------------------------------------------------------- */
-        .authorizeHttpRequests(auth -> auth
-            /* pre-flight for every path */
-            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-            /* health check endpoint */
-            .requestMatchers("/health").permitAll()
-            .requestMatchers("/debug/env").permitAll()
-            .requestMatchers("/test").permitAll()
-            .requestMatchers("/debug/all").permitAll()
-
-            /* public assets / demo endpoints */
-            .requestMatchers("/", "/dashboard", "/static/**", "/h2-console/**").permitAll()
-
-            /* Google-Drive flow */
-            .requestMatchers("/api/drive/**", "/api/fallback/drive/**").permitAll()
-
-            /* Test endpoint */
-            .requestMatchers("/api/hello").permitAll()
-
-            /* everything else needs a Clerk JWT */
-            .requestMatchers("/api/**").authenticated()
-            .requestMatchers("/api/pdf/**").authenticated()
-            .anyRequest().authenticated()
-        )
-        /* Clerk JWT */
-        .oauth2ResourceServer(o -> o
-            .jwt(j -> j.jwkSetUri(
-                "https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json"))
-        );
-
-    return http.build();
-  }
-
-  /* -------- single, global CORS policy ------------------------------- */
-  private CorsConfigurationSource cors() {
-    CorsConfiguration cfg = new CorsConfiguration();
-    cfg.setAllowedOrigins(
-        List.of("https://dociq.tech", "https://api.dociq.tech", "http://localhost:3000"));
-    cfg.setAllowedMethods(
-        List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS","HEAD"));
-    cfg.setAllowedHeaders(List.of("*"));
-    cfg.setExposedHeaders(List.of("Location","Authorization"));
-    cfg.setAllowCredentials(true);
-    cfg.setMaxAge(3600L);                       // 1 hour
-
-    UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
-    src.registerCorsConfiguration("/**", cfg);
-    return src;
-  }
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            // CORS configuration
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            
+            // Disable CSRF for stateless REST API
+            .csrf(csrf -> csrf.disable())
+            
+            // Stateless session management
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            
+            // Authorization rules
+            .authorizeHttpRequests(auth -> auth
+                // Allow OPTIONS requests for CORS pre-flight
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                
+                // Public endpoints
+                .requestMatchers(
+                    "/health",
+                    "/debug/env",
+                    "/test",
+                    "/debug/all"
+                ).permitAll()
+                
+                // Static resources and demo endpoints
+                .requestMatchers(
+                    "/",
+                    "/dashboard",
+                    "/static/**",
+                    "/h2-console/**"
+                ).permitAll()
+                
+                // Google Drive integration endpoints
+                .requestMatchers(
+                    "/api/drive/**",
+                    "/api/fallback/drive/**"
+                ).permitAll()
+                
+                // Test endpoint
+                .requestMatchers("/api/hello").permitAll()
+                
+                // Protected API endpoints (require authentication)
+                .requestMatchers("/api/**").authenticated()
+                .requestMatchers("/api/pdf/**").authenticated()
+                
+                // All other requests require authentication
+                .anyRequest().authenticated()
+            )
+            
+            // OAuth2 Resource Server with JWT
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .jwkSetUri("https://divine-duckling-17.clerk.accounts.dev/.well-known/jwks.json")
+                )
+            );
+        
+        return http.build();
+    }
+    
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        
+        // Allowed origins
+        configuration.setAllowedOrigins(Arrays.asList(
+            "https://dociq.tech",
+            "https://api.dociq.tech",
+            "http://localhost:3000"
+        ));
+        
+        // Allowed HTTP methods
+        configuration.setAllowedMethods(Arrays.asList(
+            "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"
+        ));
+        
+        // Allow all headers
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        
+        // Exposed headers
+        configuration.setExposedHeaders(Arrays.asList(
+            "Location",
+            "Authorization"
+        ));
+        
+        // Allow credentials
+        configuration.setAllowCredentials(true);
+        
+        // Cache duration for CORS pre-flight requests (1 hour)
+        configuration.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        
+        return source;
+    }
 }

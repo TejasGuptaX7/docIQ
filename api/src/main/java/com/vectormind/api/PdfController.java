@@ -6,6 +6,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
@@ -20,6 +21,9 @@ public class PdfController {
 
     private final DocumentReferenceRepository documentReferenceRepository;
     private final Path uploadDir = Paths.get("uploads");
+    
+    @Autowired
+    private JwtDecoder jwtDecoder; // Add JWT decoder for token validation
 
     @Autowired
     public PdfController(DocumentReferenceRepository documentReferenceRepository) {
@@ -38,10 +42,27 @@ public class PdfController {
                  allowCredentials = "true")
     public ResponseEntity<Resource> getPdf(
             @PathVariable String docId,
+            @RequestParam(required = false) String token,
             Authentication auth) {
         
         try {
-            String userId = getUserId(auth);
+            String userId = null;
+            
+            // First try to get userId from Authentication
+            userId = getUserId(auth);
+            
+            // If no auth, try to decode token from query parameter
+            if (userId == null && token != null && !token.isEmpty()) {
+                try {
+                    Jwt jwt = jwtDecoder.decode(token);
+                    userId = jwt.getSubject();
+                } catch (Exception e) {
+                    // Invalid token
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+                }
+            }
+            
+            // If still no userId, unauthorized
             if (userId == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
@@ -69,13 +90,15 @@ public class PdfController {
                 contentType = "application/pdf";
             }
 
-            // Return the file with appropriate headers
+            // Return the file with appropriate headers for browser viewing
             return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
+                    .contentType(MediaType.APPLICATION_PDF)
                     .header(HttpHeaders.CONTENT_DISPOSITION, 
                             "inline; filename=\"" + docRef.get().getFileName() + "\"")
                     .header(HttpHeaders.CACHE_CONTROL, 
-                            CacheControl.maxAge(1, TimeUnit.HOURS).getHeaderValue())
+                            "no-cache, no-store, must-revalidate")
+                    .header("X-Content-Type-Options", "nosniff")
+                    .header("X-Frame-Options", "SAMEORIGIN")
                     .contentLength(file.length())
                     .body(resource);
 

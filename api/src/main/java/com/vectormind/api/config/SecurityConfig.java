@@ -63,6 +63,7 @@ public class SecurityConfig {
                 
                 // Protected API endpoints (require authentication)
                 .requestMatchers("/api/**").authenticated()
+                .requestMatchers("/api/pdf/test").permitAll()
                 .requestMatchers("/api/pdf/**").authenticated()
                 
                 // All other requests require authentication
